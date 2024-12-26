@@ -81,7 +81,7 @@ func NewDefault(router adapter.Router, options option.DialerOptions) (*DefaultDi
 	if options.ConnectTimeout != 0 {
 		dialer.Timeout = time.Duration(options.ConnectTimeout)
 	} else {
-		dialer.Timeout = C.TCPTimeout
+		dialer.Timeout = C.TCPConnectTimeout
 	}
 	// TODO: Add an option to customize the keep alive period
 	dialer.KeepAlive = C.TCPKeepAliveInitial
@@ -179,7 +179,7 @@ func (d *DefaultDialer) ListenPacket(ctx context.Context, destination M.Socksadd
 }
 
 func (d *DefaultDialer) ListenPacketCompat(network, address string) (net.PacketConn, error) {
-	return trackPacketConn(d.udpListener.ListenPacket(context.Background(), network, address))
+	return d.udpListener.ListenPacket(context.Background(), network, address)
 }
 
 func trackConn(conn net.Conn, err error) (net.Conn, error) {

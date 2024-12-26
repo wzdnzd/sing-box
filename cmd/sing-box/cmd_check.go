@@ -42,7 +42,7 @@ func check() error {
 		encoder.SetIndent("", "  ")
 		encoder.Encode(options)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(globalCtx)
 	instance, err := box.New(box.Options{
 		Context: ctx,
 		Options: options,

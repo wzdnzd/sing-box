@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/experimental/libbox/internal/procfs"
 	"github.com/sagernet/sing-box/experimental/libbox/platform"
 	"github.com/sagernet/sing-box/log"
@@ -49,6 +50,7 @@ func NewService(configContent string, platformInterface PlatformInterface) (*Box
 	ctx = filemanager.WithDefault(ctx, sWorkingPath, sTempPath, sUserID, sGroupID)
 	urlTestHistoryStorage := urltest.NewHistoryStorage()
 	ctx = service.ContextWithPtr(ctx, urlTestHistoryStorage)
+	ctx = service.ContextWith[deprecated.Manager](ctx, new(deprecatedManager))
 	platformWrapper := &platformInterfaceWrapper{iif: platformInterface, useProcFS: platformInterface.UseProcFS()}
 	instance, err := box.New(box.Options{
 		Context:           ctx,
@@ -71,23 +73,36 @@ func NewService(configContent string, platformInterface PlatformInterface) (*Box
 }
 
 func (s *BoxService) Start() error {
-	return s.instance.Start()
+	if C.FixAndroidStack {
+		var err error
+		done := make(chan struct{})
+		go func() {
+			err = s.instance.Start()
+			close(done)
+		}()
+		<-done
+		return err
+	} else {
+		return s.instance.Start()
+	}
 }
 
 func (s *BoxService) Close() error {
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-done:
-			return
-		case <-time.After(C.FatalStopTimeout):
-			os.Exit(1)
-		}
-	}()
 	s.cancel()
 	s.urlTestHistoryStorage.Close()
-	return s.instance.Close()
+	var err error
+	done := make(chan struct{})
+	go func() {
+		err = s.instance.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return err
+	case <-time.After(C.FatalStopTimeout):
+		os.Exit(1)
+		return nil
+	}
 }
 
 func (s *BoxService) NeedWIFIState() bool {
@@ -114,12 +129,8 @@ func (w *platformInterfaceWrapper) UsePlatformAutoDetectInterfaceControl() bool 
 	return w.iif.UsePlatformAutoDetectInterfaceControl()
 }
 
-func (w *platformInterfaceWrapper) AutoDetectInterfaceControl() control.Func {
-	return func(network, address string, conn syscall.RawConn) error {
-		return control.Raw(conn, func(fd uintptr) error {
-			return w.iif.AutoDetectInterfaceControl(int32(fd))
-		})
-	}
+func (w *platformInterfaceWrapper) AutoDetectInterfaceControl(fd int) error {
+	return w.iif.AutoDetectInterfaceControl(int32(fd))
 }
 
 func (w *platformInterfaceWrapper) OpenTun(options *tun.Options, platformOptions option.TunPlatformOptions) (tun.Tun, error) {
@@ -177,6 +188,7 @@ func (w *platformInterfaceWrapper) Interfaces() ([]control.Interface, error) {
 			MTU:       int(netInterface.MTU),
 			Name:      netInterface.Name,
 			Addresses: common.Map(iteratorToArray[string](netInterface.Addresses), netip.MustParsePrefix),
+			Flags:     linkFlags(uint32(netInterface.Flags)),
 		})
 	}
 	return interfaces, nil
@@ -235,4 +247,8 @@ func (w *platformInterfaceWrapper) DisableColors() bool {
 
 func (w *platformInterfaceWrapper) WriteMessage(level log.Level, message string) {
 	w.iif.WriteLog(message)
+}
+
+func (w *platformInterfaceWrapper) SendNotification(notification *platform.Notification) error {
+	return w.iif.SendNotification((*Notification)(notification))
 }

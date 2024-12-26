@@ -9,6 +9,7 @@ import (
 
 	"github.com/sagernet/sing-box/common/humanize"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/experimental/locale"
 	_ "github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing-box/log"
 )
@@ -24,7 +25,6 @@ var (
 
 func init() {
 	debug.SetPanicOnFault(true)
-	debug.SetTraceback("all")
 }
 
 func Setup(basePath string, workingPath string, tempPath string, isTVOS bool) {
@@ -53,6 +53,10 @@ func SetupWithUsername(basePath string, workingPath string, tempPath string, use
 	os.Chown(sWorkingPath, sUserID, sGroupID)
 	os.Chown(sTempPath, sUserID, sGroupID)
 	return nil
+}
+
+func SetLocale(localeId string) {
+	locale.Set(localeId)
 }
 
 func Version() string {
