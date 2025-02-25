@@ -108,7 +108,7 @@ sing-box run -E -C config_dir
 合并后的配置文件:
 
 ```jsonc
-// sing-box check -v -E -c 01-base.json -c 02-provider-1.json
+// sing-box merge -E -c 01-base.json -c 02-provider-1.json
 {
   "log": {"level": "debug"},
   "outbounds": [

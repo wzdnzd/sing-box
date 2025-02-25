@@ -108,7 +108,7 @@ Suppose we have following files:
 Merged:
 
 ```jsonc
-// sing-box check -v -E -c 01-base.json -c 02-provider-1.json
+// sing-box merge -E -c 01-base.json -c 02-provider-1.json
 {
   "log": {"level": "debug"},
   "outbounds": [

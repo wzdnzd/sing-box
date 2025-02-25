@@ -2,9 +2,15 @@
 icon: material/alert-decagram
 ---
 
-### 1.11.2
+### 1.11.4
 
 * Fixes and improvements
+
+### 1.11.3
+
+* Fixes and improvements
+
+_This version overwrites 1.11.2, as incorrect binaries were released due to a bug in the continuous integration process._
 
 ### 1.11.1
 
