@@ -23,6 +23,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/pause"
 )
@@ -31,10 +32,7 @@ func RegisterURLTest(registry *outbound.Registry) {
 	outbound.Register[option.URLTestOutboundOptions](registry, C.TypeURLTest, NewURLTest)
 }
 
-var (
-	// _ adapter.OutboundGroup           = (*URLTest)(nil)
-	_ adapter.InterfaceUpdateListener = (*URLTest)(nil)
-)
+// var _ adapter.OutboundGroup = (*URLTest)(nil)
 
 type URLTest struct {
 	outbound.Adapter
@@ -176,15 +174,12 @@ func (s *URLTest) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, 
 	s.connection.NewPacketConnection(ctx, s, conn, metadata, onClose)
 }
 
-func (s *URLTest) InterfaceUpdated() {
-	go s.group.CheckOutbounds(true)
-	return
-}
-
 type URLTestGroup struct {
 	ctx                          context.Context
 	router                       adapter.Router
-	outboundManager              adapter.OutboundManager
+	outbound                     adapter.OutboundManager
+	pause                        pause.Manager
+	pauseCallback                *list.Element[pause.Callback]
 	logger                       log.Logger
 	outbounds                    []adapter.Outbound
 	link                         string
@@ -193,17 +188,15 @@ type URLTestGroup struct {
 	idleTimeout                  time.Duration
 	history                      *urltest.HistoryStorage
 	checking                     atomic.Bool
-	pauseManager                 pause.Manager
 	selectedOutboundTCP          adapter.Outbound
 	selectedOutboundUDP          adapter.Outbound
 	interruptGroup               *interrupt.Group
 	interruptExternalConnections bool
-
-	access     sync.Mutex
-	ticker     *time.Ticker
-	close      chan struct{}
-	started    bool
-	lastActive atomic.TypedValue[time.Time]
+	access                       sync.Mutex
+	ticker                       *time.Ticker
+	close                        chan struct{}
+	started                      bool
+	lastActive                   atomic.TypedValue[time.Time]
 }
 
 func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
@@ -228,7 +221,7 @@ func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManage
 	}
 	return &URLTestGroup{
 		ctx:                          ctx,
-		outboundManager:              outboundManager,
+		outbound:                     outboundManager,
 		logger:                       logger,
 		outbounds:                    outbounds,
 		link:                         link,
@@ -237,13 +230,15 @@ func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManage
 		idleTimeout:                  idleTimeout,
 		history:                      history,
 		close:                        make(chan struct{}),
-		pauseManager:                 service.FromContext[pause.Manager](ctx),
+		pause:                        service.FromContext[pause.Manager](ctx),
 		interruptGroup:               interrupt.NewGroup(),
 		interruptExternalConnections: interruptExternalConnections,
 	}, nil
 }
 
 func (g *URLTestGroup) PostStart() {
+	g.access.Lock()
+	defer g.access.Unlock()
 	g.started = true
 	g.lastActive.Store(time.Now())
 	go g.CheckOutbounds(false)
@@ -253,24 +248,25 @@ func (g *URLTestGroup) Touch() {
 	if !g.started {
 		return
 	}
+	g.access.Lock()
+	defer g.access.Unlock()
 	if g.ticker != nil {
 		g.lastActive.Store(time.Now())
 		return
 	}
-	g.access.Lock()
-	defer g.access.Unlock()
-	if g.ticker != nil {
-		return
-	}
 	g.ticker = time.NewTicker(g.interval)
 	go g.loopCheck()
+	g.pauseCallback = pause.RegisterTicker(g.pause, g.ticker, g.interval, nil)
 }
 
 func (g *URLTestGroup) Close() error {
+	g.access.Lock()
+	defer g.access.Unlock()
 	if g.ticker == nil {
 		return nil
 	}
 	g.ticker.Stop()
+	g.pause.UnregisterCallback(g.pauseCallback)
 	close(g.close)
 	return nil
 }
@@ -334,10 +330,11 @@ func (g *URLTestGroup) loopCheck() {
 			g.access.Lock()
 			g.ticker.Stop()
 			g.ticker = nil
+			g.pause.UnregisterCallback(g.pauseCallback)
+			g.pauseCallback = nil
 			g.access.Unlock()
 			return
 		}
-		g.pauseManager.WaitActive()
 		g.CheckOutbounds(false)
 	}
 }
@@ -370,7 +367,7 @@ func (g *URLTestGroup) urlTest(ctx context.Context, force bool) (map[string]uint
 			continue
 		}
 		checked[realTag] = true
-		p, loaded := g.outboundManager.Outbound(realTag)
+		p, loaded := g.outbound.Outbound(realTag)
 		if !loaded {
 			continue
 		}
