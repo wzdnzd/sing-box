@@ -28,7 +28,7 @@ func (s *RoundRobinStrategy) Pick(_, filtered []*Node, _ *adapter.InboundContext
 	s.Lock()
 	defer s.Unlock()
 	sort.Slice(filtered, func(i, j int) bool {
-		return filtered[i].Index > filtered[j].Index
+		return filtered[i].Index < filtered[j].Index
 	})
 	for _, node := range filtered {
 		if node.Index > s.index {
