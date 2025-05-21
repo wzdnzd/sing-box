@@ -116,6 +116,9 @@ func badjsonMerge() (option.Options, error) {
 	if err != nil {
 		return option.Options{}, err
 	}
+	if len(optionsList) == 0 {
+		return option.Options{}, E.New("no config files (*.json) found, use -E flag for more file formats such as .jsonc and .yml")
+	}
 	if len(optionsList) == 1 {
 		return optionsList[0].options, nil
 	}
