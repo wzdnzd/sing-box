@@ -148,7 +148,7 @@ func (v *Xray) tlsOption() *option.OutboundTLSOptions {
 			ShortID:   v.ShortID,
 		}
 	}
-	if len(v.ALPN) > 0 {
+	if v.Fingerprint != "" || v.Security == "reality" {
 		tls.UTLS = &option.OutboundUTLSOptions{
 			Enabled:     true,
 			Fingerprint: v.Fingerprint,
@@ -425,9 +425,6 @@ func (v *Xray) check() error {
 		return E.New("extra is not supported in xhttp")
 	}
 	if v.Security == "reality" {
-		if v.Fingerprint == "" {
-			return E.New("missing fp for reality")
-		}
 		if v.PubKey == "" {
 			return E.New("missing pbk for reality")
 		}
