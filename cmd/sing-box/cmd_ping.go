@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -61,11 +60,7 @@ func init() {
 func runPing() (*ping.Statistics, error) {
 	var outbound *option.Outbound
 	if commandPing.Flags().NArg() > 0 {
-		u, err := url.Parse(commandPing.Flags().Arg(0))
-		if err != nil {
-			return nil, err
-		}
-		link, err := link.Parse(u)
+		link, err := link.Parse(commandPing.Flags().Arg(0))
 		if err != nil {
 			return nil, err
 		}

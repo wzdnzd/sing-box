@@ -25,7 +25,7 @@ import (
 
 // RegisterRemote registers the remote provider.
 func RegisterRemote(registry *provider.Registry) {
-	provider.Register[option.RemoteProviderOptions](registry, C.ProviderHTTP, NewRemote)
+	provider.Register(registry, C.ProviderHTTP, NewRemote)
 }
 
 var _ adapter.Provider = (*Remote)(nil)
@@ -266,79 +266,57 @@ func (s *Remote) Update() error {
 		return nil
 	}
 	s.loadedHash = c.linksHash
-	opts, err := s.getOutboundsOptions(c.links)
-	if err != nil {
-		return err
-	}
-	s.logger.Info(len(opts), " links found")
-	s.updateOutbounds(opts)
+	s.updateOutbounds(c.links)
 	return nil
 }
 
-func (s *Remote) updateOutbounds(opts []*option.Outbound) {
-	outbounds := make([]adapter.Outbound, 0, len(opts))
+func (s *Remote) updateOutbounds(content string) {
+	outbounds := make([]adapter.Outbound, 0)
 	outboundsByTag := make(map[string]adapter.Outbound)
-	for _, opt := range opts {
-		tag := s.tag + "/" + opt.Tag
-		err := s.outbound.Create(
-			s.parentCtx,
-			s.router,
-			s.logFactory.NewLogger(F.ToString("provider/", opt.Type, "[", tag, "]")),
-			tag,
-			opt.Type,
-			opt.Options,
-		)
-		if err != nil {
-			s.logger.Warn("create [", tag, "]: ", err)
+	for i, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		outbound, loaded := s.outbound.Outbound(tag)
-		if !loaded {
-			s.logger.Warn("outbound [", tag, "] not found")
+		outbound, err := s.processLine(line)
+		if err != nil {
+			s.logger.Warn("line ", i+1, ": ", err)
 			continue
 		}
 		outbounds = append(outbounds, outbound)
-		outboundsByTag[tag] = outbound
+		outboundsByTag[outbound.Tag()] = outbound
 	}
+	s.logger.Info(len(outbounds), " outbounds available")
 	s.outbounds = outbounds
 	s.outboundsByTag = outboundsByTag
 }
 
-func (s *Remote) getOutboundsOptions(content string) ([]*option.Outbound, error) {
-	opts := make([]*option.Outbound, 0)
-	links, err := s.parseLinks(content)
+func (s *Remote) processLine(line string) (adapter.Outbound, error) {
+	lnk, err := link.Parse(line)
 	if err != nil {
-		return nil, err
+		return nil, E.New("parse link: ", err)
 	}
-	for _, link := range links {
-		opt, err := link.Outbound()
-		if err != nil {
-			s.logger.Warn("prepare options for link:", err)
-			continue
-		}
-		if s.exclude != nil && s.exclude.MatchString(opt.Tag) {
-			continue
-		}
-		if s.include != nil && !s.include.MatchString(opt.Tag) {
-			continue
-		}
-		opts = append(opts, opt)
-	}
-	return opts, nil
-}
-
-func (s *Remote) parseLinks(content string) ([]link.Link, error) {
-	links, err := link.ParseCollection(content)
-	if len(links) > 0 {
-		if err != nil {
-			s.logger.Warn("links parsed with error:", err)
-		}
-		return links, nil
-	}
+	opt, err := lnk.Outbound()
 	if err != nil {
-		return nil, err
+		return nil, E.New("make options:", err)
 	}
-	return nil, E.New("no links found")
+	tag := s.tag + "/" + opt.Tag
+	err = s.outbound.Create(
+		s.parentCtx,
+		s.router,
+		s.logFactory.NewLogger(F.ToString("provider/", opt.Type, "[", tag, "]")),
+		tag,
+		opt.Type,
+		opt.Options,
+	)
+	if err != nil {
+		return nil, E.New("create [", tag, "]: ", err)
+	}
+	outbound, loaded := s.outbound.Outbound(tag)
+	if !loaded {
+		return nil, E.New("outbound [", tag, "] created but not found")
+	}
+	return outbound, nil
 }
 
 func (s *Remote) downloadWithCache() (*fileContent, error) {

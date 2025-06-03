@@ -25,7 +25,11 @@ type Link interface {
 }
 
 // Parse parses a link string to Link
-func Parse(u *url.URL) (Link, error) {
+func Parse(s string) (Link, error) {
+	u, err := url.Parse(s)
+	if err != nil {
+		return nil, err
+	}
 	ps, err := getParsers(u)
 	if err != nil {
 		return nil, err
@@ -42,29 +46,6 @@ func Parse(u *url.URL) (Link, error) {
 		return nil, errs[0]
 	}
 	return nil, E.Errors(errs...)
-}
-
-// ParseCollection parses a links collection string to []Link
-func ParseCollection(content string) ([]Link, error) {
-	links := make([]Link, 0)
-	errs := make([]error, 0)
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		u, err := url.Parse(line)
-		if err != nil {
-			continue
-		}
-		link, err := Parse(u)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		links = append(links, link)
-	}
-	return links, E.Errors(errs...)
 }
 
 func base64Decode(b64 string) ([]byte, error) {
