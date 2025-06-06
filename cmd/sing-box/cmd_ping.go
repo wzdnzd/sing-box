@@ -3,27 +3,43 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
-
-	"github.com/sagernet/sing/common/json"
 
 	"github.com/sagernet/sing-box/common/link"
 	"github.com/sagernet/sing-box/common/ping"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
+	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/sagernet/sing/common/json"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var commandPing = &cobra.Command{
-	Use:   "ping [flags] [link]",
+	Use:   "ping [flags] [tag_or_links]",
 	Short: "Link prober",
-	Long:  `sing-box link prober`,
-	Args:  cobra.MaximumNArgs(1),
+	Long: `sing-box link prober.
+It sends HTTP HEAD requests to the destination via the outbound / outbounds chain,
+and print the round trip time (RTT) for each request.
+
+The outbounds can be specified by tags (of configuration file) or links.
+
+Example: 
+
+# ping via the outbound from the configuration file
+> sing-box ping -c conifg.json outbound_tag
+
+# ping via the outbound from link
+> sing-box ping vmess://...
+
+# ping via an outbounds chain
+> sing-box ping -c conifg.json outbound_tag vmess://...
+`,
 }
 
 var (
@@ -47,20 +63,35 @@ func init() {
 			os.Exit(1)
 		}
 	}
-	commandPing.SetHelpFunc(func(c *cobra.Command, s []string) {
-		// hide global flags
-		c.Parent().Flags().VisitAll(func(f *pflag.Flag) {
-			f.Hidden = true
-		})
-		c.Parent().HelpFunc()(c, s)
-	})
+	// commandPing.SetHelpFunc(func(c *cobra.Command, s []string) {
+	// 	// hide global flags
+	// 	c.Parent().Flags().VisitAll(func(f *pflag.Flag) {
+	// 		f.Hidden = true
+	// 	})
+	// 	c.Parent().HelpFunc()(c, s)
+	// })
 	mainCommand.AddCommand(commandPing)
 }
 
 func runPing() (*ping.Statistics, error) {
-	var outbound *option.Outbound
-	if commandPing.Flags().NArg() > 0 {
-		link, err := link.Parse(commandPing.Flags().Arg(0))
+	if commandPing.Flags().NArg() == 0 {
+		return nil, E.New("no destination specified")
+	}
+	var (
+		tags        []string
+		requireConf bool
+		outbounds   []option.Outbound
+		detour      string
+	)
+	for i, arg := range commandPing.Flags().Args() {
+		uri, err := url.Parse(arg)
+		if err != nil || uri.Scheme == "" {
+			// a tag
+			requireConf = true
+			tags = append(tags, arg)
+			continue
+		}
+		link, err := link.Parse(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -68,23 +99,50 @@ func runPing() (*ping.Statistics, error) {
 		if err != nil {
 			return nil, err
 		}
-		outbound = out
-	} else {
-		outbound = &option.Outbound{
-			Type: C.TypeDirect,
+		if out.Tag == "" {
+			out.Tag = fmt.Sprintf("outbound%d", i+1)
 		}
+		tags = append(tags, out.Tag)
+		outbounds = append(outbounds, *out)
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(out)
+		os.Stdout.WriteString("\n")
+	}
+	if len(tags) == 1 {
+		detour = tags[0]
+	} else {
+		detour = strings.Join(tags, " => ")
+		chain := option.Outbound{
+			Tag:  detour,
+			Type: C.TypeChain,
+			Options: &option.ChainOptions{
+				Outbounds: tags,
+			},
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(&chain)
+		os.Stdout.WriteString("\n")
+		outbounds = append(outbounds, chain)
+	}
+
+	var providers []option.Provider
+	if requireConf {
+		options, err := readConfigAndMerge()
+		if err != nil {
+			return nil, err
+		}
+		outbounds = append(outbounds, options.Outbounds...)
+		providers = options.Providers
 	}
 
 	client := &ping.Client{
-		Count:    commandPingFlagCount,
-		Interval: commandPingFlagInteval,
-		Outbound: outbound,
+		Count:     commandPingFlagCount,
+		Interval:  commandPingFlagInteval,
+		Outbounds: outbounds,
+		Providers: providers,
 	}
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	encoder.Encode(outbound)
-	os.Stdout.WriteString("\n")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 	go func() {
@@ -105,7 +163,7 @@ func runPing() (*ping.Statistics, error) {
 		"sing-box ping (version %s)\n",
 		C.Version,
 	))
-	stat, err := client.Ping(ctx, commandPingFlagDest)
+	stat, err := client.Ping(ctx, detour, commandPingFlagDest)
 	cancel()
 	if err != nil {
 		return nil, err

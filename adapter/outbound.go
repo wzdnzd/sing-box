@@ -33,5 +33,5 @@ type OutboundManager interface {
 	// DupOverrideDetour duplicates the outbound with the specified tag and sets the override and detour for the duplicated outbound.
 	// The original outbound is not affected.
 	// The duplicated outbound is not managed by the manager, you should close it manually.
-	DupOverrideDetour(ctx context.Context, router Router, tag string, detour N.Dialer) (Outbound, error)
+	DupOverrideDetour(ctx context.Context, router Router, tag string, logger log.ContextLogger, detour N.Dialer) (Outbound, error)
 }

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	box "github.com/sagernet/sing-box"
-	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -15,18 +14,24 @@ import (
 
 // Client is the ping client
 type Client struct {
-	Count    uint
-	Interval time.Duration
-	Outbound *option.Outbound
+	Count     uint
+	Interval  time.Duration
+	Outbounds []option.Outbound
+	Providers []option.Provider
 }
 
 // Ping pings the destination
-func (c *Client) Ping(ctx context.Context, destination string) (*Statistics, error) {
-	instance, detour, err := newInstance(ctx, c.Outbound)
+func (c *Client) Ping(ctx context.Context, tag string, destination string) (*Statistics, error) {
+	instance, err := newInstance(ctx, c.Outbounds, c.Providers)
 	if err != nil {
 		return nil, err
 	}
 	defer instance.Close()
+
+	detour, found := instance.Outbound().Outbound(tag)
+	if !found {
+		return nil, err
+	}
 
 	startAt := time.Now()
 	rtts := make([]uint16, 0)
@@ -72,24 +77,25 @@ L:
 	return getStatistics(startAt, round, rtts), nil
 }
 
-func newInstance(ctx context.Context, outbound *option.Outbound) (*box.Box, adapter.Outbound, error) {
+func newInstance(ctx context.Context, outbounds []option.Outbound, providers []option.Provider) (*box.Box, error) {
 	options := option.Options{
 		Log: &option.LogOptions{
-			Level: log.FormatLevel(log.LevelPanic),
+			Disabled: true,
+			Level:    log.FormatLevel(log.LevelInfo),
 		},
-		Outbounds: []option.Outbound{*outbound},
+		Outbounds: outbounds,
+		Providers: providers,
 	}
 	instance, err := box.New(box.Options{
 		Context: ctx,
 		Options: options,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	err = instance.Start()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	detour := instance.Outbound().Outbounds()[0]
-	return instance, detour, nil
+	return instance, nil
 }

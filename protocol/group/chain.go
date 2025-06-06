@@ -66,7 +66,7 @@ func (s *Chain) Start() error {
 	}
 	for i := len(s.outboundTags) - 2; i >= 0; i-- {
 		tag := s.outboundTags[i]
-		outbound, err := s.outbound.DupOverrideDetour(s.ctx, s.router, tag, detour)
+		outbound, err := s.outbound.DupOverrideDetour(s.ctx, s.router, tag, s.logger, detour)
 		if err != nil {
 			return E.New("failed to create [", tag, "] for chain [", s.Tag(), "]: ", err)
 		}

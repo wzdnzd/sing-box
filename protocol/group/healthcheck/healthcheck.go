@@ -30,7 +30,7 @@ type HealthCheck struct {
 	ctx            context.Context
 	router         adapter.Router
 	om             adapter.OutboundManager
-	logger         log.Logger
+	logger         log.ContextLogger
 	pauseManager   pause.Manager
 	globalHistory  *urltest.HistoryStorage
 	providers      []adapter.Provider
@@ -53,7 +53,7 @@ func New(
 	router adapter.Router,
 	outbound adapter.OutboundManager,
 	providers []adapter.Provider,
-	options *option.HealthCheckOptions, logger log.Logger,
+	options *option.HealthCheckOptions, logger log.ContextLogger,
 ) *HealthCheck {
 	if options == nil {
 		options = &option.HealthCheckOptions{}
@@ -107,7 +107,7 @@ func (h *HealthCheck) Start() error {
 		h.detourOf = make([]adapter.Outbound, len(h.options.DetourOf))
 		for i := len(h.options.DetourOf) - 1; i >= 0; i-- {
 			tag := h.options.DetourOf[i]
-			outbound, err := h.om.DupOverrideDetour(h.ctx, h.router, tag, detour)
+			outbound, err := h.om.DupOverrideDetour(h.ctx, h.router, tag, h.logger, detour)
 			if err != nil {
 				return E.Cause(err, "detour_of")
 			}

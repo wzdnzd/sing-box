@@ -306,7 +306,7 @@ func (m *Manager) Create(ctx context.Context, router adapter.Router, logger log.
 // DupOverrideDetour duplicates the outbound with the specified tag and sets the override and detour for the duplicated outbound.
 // The original outbound is not affected.
 // The duplicated outbound is not managed by the manager, you should close it manually.
-func (m *Manager) DupOverrideDetour(ctx context.Context, router adapter.Router, tag string, detour N.Dialer) (adapter.Outbound, error) {
+func (m *Manager) DupOverrideDetour(ctx context.Context, router adapter.Router, tag string, logger log.ContextLogger, detour N.Dialer) (adapter.Outbound, error) {
 	m.access.Lock()
 	defer m.access.Unlock()
 	conf, found := m.confByTag[tag]
@@ -315,7 +315,7 @@ func (m *Manager) DupOverrideDetour(ctx context.Context, router adapter.Router, 
 	}
 	// It's hacky here, works only if all outbound creations invoke dialer.New()
 	ctx, used := dialer.ContextWithDetourOverride(ctx, detour)
-	outbound, err := m.registry.CreateOutbound(ctx, router, m.logger, tag, conf.typ, conf.options)
+	outbound, err := m.registry.CreateOutbound(ctx, router, logger, tag, conf.typ, conf.options)
 	if err != nil {
 		return nil, err
 	}
