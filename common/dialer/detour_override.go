@@ -24,8 +24,8 @@ func ContextWithDetourOverride(parentCtx context.Context, detour N.Dialer) (ctx 
 	}
 }
 
-// DetourOverrideFromContext returns the detour override from the context.
-func DetourOverrideFromContext(ctx context.Context) N.Dialer {
+// detourOverrideFromContext returns the detour override from the context.
+func detourOverrideFromContext(ctx context.Context) N.Dialer {
 	value := ctx.Value(detourOverridekey{})
 	if value == nil {
 		return nil

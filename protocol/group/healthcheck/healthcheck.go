@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -103,7 +102,7 @@ func (h *HealthCheck) Start() error {
 		if h.om == nil {
 			return E.New("missing outbound manager")
 		}
-		detour := dialer.NewDetourVar()
+		detour := newDetourVar()
 		h.detourOf = make([]adapter.Outbound, len(h.options.DetourOf))
 		for i := len(h.options.DetourOf) - 1; i >= 0; i-- {
 			tag := h.options.DetourOf[i]
@@ -282,7 +281,7 @@ func (h *HealthCheck) checkOutbound(ctx context.Context, outbound adapter.Outbou
 	defer cancel()
 	testCtx = log.ContextWithOverrideLevel(testCtx, log.LevelDebug)
 	if len(h.detourOf) > 0 {
-		testCtx = dialer.ContextWithDetourVar(testCtx, outbound)
+		testCtx = contextWithDetourVar(testCtx, outbound)
 		outbound = h.detourOf[0]
 	}
 	t, err := urltest.URLTest(testCtx, h.options.Destination, outbound)
