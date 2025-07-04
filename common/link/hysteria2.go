@@ -97,6 +97,13 @@ func (l *Hysteria2) Outbound() (*option.Outbound, error) {
 	if l.User != "" {
 		password = fmt.Sprintf("%s:%s", l.User, l.Auth)
 	}
+	var obfs *option.Hysteria2Obfs
+	if l.Obfs != "" || l.ObfsPassword != "" {
+		obfs = &option.Hysteria2Obfs{
+			Type:     l.Obfs,
+			Password: l.ObfsPassword,
+		}
+	}
 	return &option.Outbound{
 		Type: C.TypeHysteria2,
 		Tag:  l.Remarks,
@@ -106,10 +113,7 @@ func (l *Hysteria2) Outbound() (*option.Outbound, error) {
 				ServerPort: l.Port,
 			},
 			Password: password,
-			Obfs: &option.Hysteria2Obfs{
-				Type:     l.Obfs,
-				Password: l.ObfsPassword,
-			},
+			Obfs:     obfs,
 			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{
 				TLS: &option.OutboundTLSOptions{
 					Enabled:    true,
