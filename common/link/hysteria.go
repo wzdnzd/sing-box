@@ -64,16 +64,7 @@ func ParseHysteria(u *url.URL) (*Hysteria, error) {
 	for key, values := range queries {
 		switch key {
 		case "protocol":
-			protocol := "udp"
-			switch values[0] {
-			case "", "udp":
-				break
-			case "wechat-video", "faketcp":
-				return nil, E.New("unsupported protocol: " + values[0])
-			default:
-				return nil, E.New("unknown network: " + values[0])
-			}
-			link.Protocol = protocol
+			link.Protocol = values[0]
 		case "auth":
 			link.Auth = values[0]
 		case "peer":
@@ -113,6 +104,17 @@ func ParseHysteria(u *url.URL) (*Hysteria, error) {
 
 // Outbound implements the Link interface
 func (l *Hysteria) Outbound() (*option.Outbound, error) {
+	switch l.Protocol {
+	case "", "udp":
+	default:
+		return nil, E.New("unsupported protocol: " + l.Protocol)
+	}
+	if l.UpMpbs == 0 {
+		return nil, E.New("upmbps is required")
+	}
+	if l.DownMpbs == 0 {
+		return nil, E.New("downmbps is required")
+	}
 	return &option.Outbound{
 		Type: C.TypeHysteria,
 		Tag:  l.Remarks,

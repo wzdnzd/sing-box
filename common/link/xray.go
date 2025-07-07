@@ -20,11 +20,7 @@ func init() {
 		Name:   "Xray",
 		Scheme: []string{"vless", "vmess"},
 		Parse: func(u *url.URL) (Link, error) {
-			lnk, err := ParseXray(u)
-			if err != nil {
-				return nil, err
-			}
-			return lnk, lnk.compatiblily()
+			return ParseXray(u)
 		},
 	}))
 }

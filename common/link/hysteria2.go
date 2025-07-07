@@ -33,7 +33,7 @@ type Hysteria2 struct {
 	ObfsPassword string `json:"obfs_password,omitempty"`
 	SNI          string `json:"sni,omitempty"`
 	Insecure     bool   `json:"insecure,omitempty"`
-	PingSHA256   string `json:"pin_sha256,omitempty"`
+	PinSHA256    string `json:"pin_sha256,omitempty"`
 
 	Remarks string `json:"remarks,omitempty"`
 }
@@ -71,9 +71,6 @@ func ParseHysteria2(u *url.URL) (*Hysteria2, error) {
 	for key, values := range queries {
 		switch key {
 		case "obfs":
-			if values[0] != "salamander" {
-				return nil, E.New("unsupported obfs: " + values[0])
-			}
 			link.Obfs = values[0]
 		case "obfs-password":
 			link.ObfsPassword = values[0]
@@ -82,10 +79,7 @@ func ParseHysteria2(u *url.URL) (*Hysteria2, error) {
 		case "insecure":
 			link.Insecure = values[0] == "1"
 		case "pinSHA256":
-			if values[0] != "" {
-				return nil, E.New("pinSHA256 is not unsupported")
-			}
-			link.PingSHA256 = values[0]
+			link.PinSHA256 = values[0]
 		}
 	}
 	return link, nil
@@ -93,6 +87,9 @@ func ParseHysteria2(u *url.URL) (*Hysteria2, error) {
 
 // Outbound implements the Link interface
 func (l *Hysteria2) Outbound() (*option.Outbound, error) {
+	if l.PinSHA256 != "" {
+		return nil, E.New("pinSHA256 is not unsupported")
+	}
 	password := l.Auth
 	if l.User != "" {
 		password = fmt.Sprintf("%s:%s", l.User, l.Auth)
@@ -155,8 +152,8 @@ func (l *Hysteria2) URL() (string, error) {
 	if l.Insecure {
 		query.Set("insecure", "1")
 	}
-	if l.PingSHA256 != "" {
-		query.Set("pinSHA256", l.PingSHA256)
+	if l.PinSHA256 != "" {
+		query.Set("pinSHA256", l.PinSHA256)
 	}
 
 	uri.RawQuery = query.Encode()
