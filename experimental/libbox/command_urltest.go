@@ -63,10 +63,7 @@ func (s *CommandServer) handleURLTest(conn net.Conn) error {
 				return false
 			}
 			_, isGroup := it.(adapter.OutboundGroup)
-			if isGroup {
-				return false
-			}
-			return true
+			return !isGroup
 		})
 		b, _ := batch.New(serviceNow.ctx, batch.WithConcurrencyNum[any](10))
 		for _, detour := range outbounds {
@@ -77,7 +74,7 @@ func (s *CommandServer) handleURLTest(conn net.Conn) error {
 				if err != nil {
 					historyStorage.DeleteURLTestHistory(outboundTag)
 				} else {
-					historyStorage.StoreURLTestHistory(outboundTag, &urltest.History{
+					historyStorage.StoreURLTestHistory(outboundTag, &adapter.URLTestHistory{
 						Time:  time.Now(),
 						Delay: t,
 					})

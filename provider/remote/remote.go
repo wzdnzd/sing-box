@@ -142,7 +142,10 @@ func (s *Remote) Info() *adapter.ProviderInfo {
 }
 
 // Start starts the provider.
-func (s *Remote) Start() error {
+func (s *Remote) Start(stage adapter.StartStage) error {
+	if stage != adapter.StartStateStart {
+		return nil
+	}
 	s.Lock()
 	defer s.Unlock()
 

@@ -24,7 +24,7 @@ func RegisterLoadBalance(registry *outbound.Registry) {
 var (
 	_ adapter.Outbound                = (*LoadBalance)(nil)
 	_ adapter.OutboundCheckGroup      = (*LoadBalance)(nil)
-	_ adapter.Service                 = (*LoadBalance)(nil)
+	_ adapter.SimpleLifecycle         = (*LoadBalance)(nil)
 	_ adapter.InterfaceUpdateListener = (*LoadBalance)(nil)
 )
 

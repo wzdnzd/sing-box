@@ -72,13 +72,13 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 	info.Put("udp", common.Contains(detour.Network(), N.NetworkUDP))
 	real, err := adapter.RealOutbound(detour)
 	if err != nil {
-		info.Put("history", []*urltest.History{})
+		info.Put("history", []*adapter.URLTestHistory{})
 	} else {
 		delayHistory := server.urlTestHistory.LoadURLTestHistory(real.Tag())
 		if delayHistory != nil {
-			info.Put("history", []*urltest.History{delayHistory})
+			info.Put("history", []*adapter.URLTestHistory{delayHistory})
 		} else {
-			info.Put("history", []*urltest.History{})
+			info.Put("history", []*adapter.URLTestHistory{})
 		}
 	}
 	if group, isGroup := detour.(adapter.OutboundGroup); isGroup {
@@ -121,7 +121,7 @@ func getProxies(server *Server) func(w http.ResponseWriter, r *http.Request) {
 			"type":    "Fallback",
 			"name":    "GLOBAL",
 			"udp":     true,
-			"history": []*urltest.History{},
+			"history": []*adapter.URLTestHistory{},
 			"all":     allProxies,
 			"now":     defaultTag,
 		})
@@ -221,12 +221,12 @@ func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 		defer func() {
 			real, err := adapter.RealOutbound(proxy)
 			if err != nil {
-				server.urlTestHistory.StoreURLTestHistory(proxy.Tag(), &urltest.History{
+				server.urlTestHistory.StoreURLTestHistory(proxy.Tag(), &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: 0,
 				})
 			} else {
-				server.urlTestHistory.StoreURLTestHistory(real.Tag(), &urltest.History{
+				server.urlTestHistory.StoreURLTestHistory(real.Tag(), &adapter.URLTestHistory{
 					Time:  time.Now(),
 					Delay: delay,
 				})

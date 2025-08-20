@@ -101,12 +101,12 @@ func checkProvider(server *Server) func(w http.ResponseWriter, r *http.Request) 
 				delay, err := urltest.URLTest(r.Context(), "", real)
 				tag := real.Tag()
 				if err != nil {
-					server.urlTestHistory.StoreURLTestHistory(tag, &urltest.History{
+					server.urlTestHistory.StoreURLTestHistory(tag, &adapter.URLTestHistory{
 						Time:  time.Now(),
 						Delay: 0,
 					})
 				} else {
-					server.urlTestHistory.StoreURLTestHistory(tag, &urltest.History{
+					server.urlTestHistory.StoreURLTestHistory(tag, &adapter.URLTestHistory{
 						Time:  time.Now(),
 						Delay: delay,
 					})

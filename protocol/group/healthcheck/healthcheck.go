@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	_ adapter.Service                 = (*HealthCheck)(nil)
+	_ adapter.SimpleLifecycle         = (*HealthCheck)(nil)
 	_ adapter.InterfaceUpdateListener = (*HealthCheck)(nil)
 )
 
@@ -31,7 +31,7 @@ type HealthCheck struct {
 	om             adapter.OutboundManager
 	logger         log.ContextLogger
 	pauseManager   pause.Manager
-	globalHistory  *urltest.HistoryStorage
+	globalHistory  adapter.URLTestHistoryStorage
 	providers      []adapter.Provider
 	providersByTag map[string]adapter.Provider
 	detourOf       []adapter.Outbound
@@ -70,8 +70,8 @@ func New(
 	for _, provider := range providers {
 		providersByTag[provider.Tag()] = provider
 	}
-	var history *urltest.HistoryStorage
-	if history = service.PtrFromContext[urltest.HistoryStorage](ctx); history != nil {
+	var history adapter.URLTestHistoryStorage
+	if history = service.FromContext[adapter.URLTestHistoryStorage](ctx); history != nil {
 	} else if clashServer := service.FromContext[adapter.ClashServer](ctx); clashServer != nil {
 		history = clashServer.HistoryStorage()
 	} else {
@@ -220,7 +220,7 @@ func (h *HealthCheck) CheckOutbound(ctx context.Context, tag string) (uint16, er
 	}
 	t, err := h.checkOutbound(ctx, outbound)
 	if h.globalHistory != nil {
-		h.globalHistory.StoreURLTestHistory(tag, &urltest.History{
+		h.globalHistory.StoreURLTestHistory(tag, &adapter.URLTestHistory{
 			Time:  time.Now(),
 			Delay: t,
 		})
@@ -305,7 +305,7 @@ func (h *HealthCheck) waitProcessResult(batch *batch.Batch[uint16], meta *MetaDa
 		// always update global history for display usage,
 		// so that user can see the latest failure status
 		if h.globalHistory != nil {
-			h.globalHistory.StoreURLTestHistory(tag, &urltest.History{
+			h.globalHistory.StoreURLTestHistory(tag, &adapter.URLTestHistory{
 				Time:  time.Now(),
 				Delay: v.Value,
 			})

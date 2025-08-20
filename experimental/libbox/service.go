@@ -18,7 +18,6 @@ import (
 	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/experimental/libbox/internal/procfs"
 	"github.com/sagernet/sing-box/experimental/libbox/platform"
-	"github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	tun "github.com/sagernet/sing-tun"
@@ -28,14 +27,13 @@ import (
 	"github.com/sagernet/sing/common/logger"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
-	"github.com/sagernet/sing/service/filemanager"
 	"github.com/sagernet/sing/service/pause"
 )
 
 type BoxService struct {
 	ctx                   context.Context
 	cancel                context.CancelFunc
-	urlTestHistoryStorage *urltest.HistoryStorage
+	urlTestHistoryStorage adapter.URLTestHistoryStorage
 	instance              *box.Box
 	clashServer           adapter.ClashServer
 	pauseManager          pause.Manager
@@ -44,8 +42,7 @@ type BoxService struct {
 }
 
 func NewService(configContent string, platformInterface PlatformInterface) (*BoxService, error) {
-	ctx := box.Context(context.Background(), include.InboundRegistry(), include.OutboundRegistry(), include.ProviderRegistry(), include.EndpointRegistry())
-	ctx = filemanager.WithDefault(ctx, sWorkingPath, sTempPath, sUserID, sGroupID)
+	ctx := BaseContext(platformInterface)
 	service.MustRegister[deprecated.Manager](ctx, new(deprecatedManager))
 	options, err := parseConfig(ctx, configContent)
 	if err != nil {
@@ -165,6 +162,7 @@ func (w *platformInterfaceWrapper) OpenTun(options *tun.Options, platformOptions
 	if err != nil {
 		return nil, E.Cause(err, "query tun name")
 	}
+	options.InterfaceMonitor.RegisterMyInterface(options.Name)
 	dupFd, err := dup(int(tunFd))
 	if err != nil {
 		return nil, E.Cause(err, "dup tun file descriptor")
@@ -192,6 +190,9 @@ func (w *platformInterfaceWrapper) Interfaces() ([]adapter.NetworkInterface, err
 			continue
 		}
 		w.defaultInterfaceAccess.Lock()
+		// (GOOS=windows) SA4006: this value of `isDefault` is never used
+		// Why not used?
+		//nolint:staticcheck
 		isDefault := w.defaultInterface != nil && int(netInterface.Index) == w.defaultInterface.Index
 		w.defaultInterfaceAccess.Unlock()
 		interfaces = append(interfaces, adapter.NetworkInterface{
@@ -229,6 +230,10 @@ func (w *platformInterfaceWrapper) ReadWIFIState() adapter.WIFIState {
 		return adapter.WIFIState{}
 	}
 	return (adapter.WIFIState)(*wifiState)
+}
+
+func (w *platformInterfaceWrapper) SystemCertificates() []string {
+	return iteratorToArray[string](w.iif.SystemCertificates())
 }
 
 func (w *platformInterfaceWrapper) FindProcessInfo(ctx context.Context, network string, source netip.AddrPort, destination netip.AddrPort) (*process.Info, error) {
