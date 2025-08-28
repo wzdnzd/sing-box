@@ -30,7 +30,7 @@ func (c *Client) Ping(ctx context.Context, tag string, destination string) (*Sta
 
 	detour, found := instance.Outbound().Outbound(tag)
 	if !found {
-		return nil, err
+		return nil, fmt.Errorf("outbound not found: %s", tag)
 	}
 
 	startAt := time.Now()
