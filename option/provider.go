@@ -46,12 +46,18 @@ func (h *Provider) UnmarshalJSONContext(ctx context.Context, content []byte) err
 	return nil
 }
 
+type OverrideSchema struct {
+	AdditionalPrefix *string `json:"prefix,omitempty"`
+	AdditionalSuffix *string `json:"suffix,omitempty"`
+}
+
 type RemoteProviderOptions struct {
 	URL              string             `json:"url"`
 	Interval         badoption.Duration `json:"interval,omitempty"`
 	CacheFile        string             `json:"cache_file,omitempty"`
 	DownloadDetour   string             `json:"download_detour,omitempty"`
 	DisableUserAgent bool               `json:"disable_user_agent,omitempty"`
+	Override         *OverrideSchema    `json:"override,omitempty"`
 
 	Exclude string `json:"exclude,omitempty"`
 	Include string `json:"include,omitempty"`

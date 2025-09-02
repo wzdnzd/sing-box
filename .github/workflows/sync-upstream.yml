@@ -1,0 +1,111 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch: # 允许手动触发
+  schedule:
+    - cron: "0 */8 * * *" # 每8小时执行一次
+
+jobs:
+  sync:
+    name: 同步上游代码
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 添加写入内容的权限
+    steps:
+      - name: 检出当前仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.WORKFLOW_TOKEN }} # 使用GitHub提供的token
+
+      - name: 配置 Git
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+      - name: 添加远程仓库
+        run: |
+          # 添加上游仓库（qjebbs/sing-box）
+          git remote add qjebbs https://github.com/qjebbs/sing-box.git
+
+          # 检查远程仓库是否添加成功
+          echo "已添加的远程仓库:"
+          git remote -v
+
+      - name: 获取远程仓库信息
+        run: |
+          # 获取当前仓库信息
+          echo "获取当前仓库信息..."
+          git fetch origin
+
+          # 获取qjebbs仓库信息（包括所有分支和标签）
+          echo "获取qjebbs仓库信息..."
+          git fetch qjebbs --tags --force
+
+          # 显示所有可用的标签
+          echo "可用的标签:"
+          git tag -l
+
+      - name: 同步上游代码
+        run: |
+          # 当前分支名称（通常是main）
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "当前分支: $CURRENT_BRANCH"
+
+          # 为安全起见，创建临时分支
+          SYNC_BRANCH="sync-upstream-$(date +%Y%m%d%H%M%S)"
+          git checkout -b $SYNC_BRANCH
+
+          # 将qjebbs/sing-box的main分支rebase到临时分支
+          echo "正在同步 qjebbs/sing-box 的 main 分支..."
+          git fetch qjebbs main
+
+          if ! git rebase qjebbs/main; then
+            echo "检测到rebase冲突，尝试使用merge策略..."
+            git rebase --abort
+            git merge qjebbs/main -m "Merge qjebbs/sing-box main branch"
+            
+            if [ $? -ne 0 ]; then
+              echo "merge也有冲突，请手动解决冲突..."
+              git merge --abort
+              exit 1
+            fi
+          fi
+
+          echo "✅ 已完成与 qjebbs/sing-box main 分支的同步"
+
+          # 同步qjebbs仓库的最新稳定tag（过滤alpha和beta版本）
+          echo "同步qjebbs仓库的最新稳定tag..."
+          # 获取所有tag并按版本排序，过滤掉包含alpha或beta的tag
+          LATEST_TAG=$(git ls-remote --tags qjebbs | grep -v '{}' | cut -d/ -f3 | grep -v -E 'alpha|beta|rc' | sort -V | tail -n1)
+          echo "qjebbs仓库最新稳定tag: $LATEST_TAG"
+
+          # 在本地创建同名tag
+          if [ -n "$LATEST_TAG" ]; then
+            git tag -f $LATEST_TAG qjebbs/main
+            echo "✅ 已创建本地tag: $LATEST_TAG"
+          fi
+
+          # 将临时分支的更改应用到原始分支（通常是main）
+          echo "将同步结果应用到 $CURRENT_BRANCH 分支..."
+          git checkout $CURRENT_BRANCH
+          # 强制重置当前分支到临时分支的状态
+          git reset --hard $SYNC_BRANCH
+          # 强制推送更改到远程仓库，包括标签
+          git push -f origin $CURRENT_BRANCH
+          git push -f origin --tags
+
+          # 清理：删除临时分支
+          git branch -D $SYNC_BRANCH
+          echo "✅ 同步完成，临时分支已清理"
+
+      - name: 结果通知
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ 成功同步上游代码！"
+            echo "  - 从 qjebbs/sing-box 同步了 main 分支"
+            echo "  - 同步了最新稳定标签"
+          else
+            echo "❌ 同步失败，请查看日志获取详细信息。"
+          fi

@@ -56,6 +56,7 @@ type Remote struct {
 	include        *regexp.Regexp
 	userAgent      string
 	disableUA      bool
+	override       *option.OverrideSchema
 
 	sync.Mutex
 	*adapter.ProviderInfo
@@ -120,6 +121,7 @@ func NewRemote(ctx context.Context, router adapter.Router, logFactory log.Factor
 		disableUA:      options.DisableUserAgent,
 		exclude:        exclude,
 		include:        include,
+		override:       options.Override,
 
 		ctx:     ctx,
 		chReady: make(chan struct{}),
@@ -303,7 +305,22 @@ func (s *Remote) processLine(line string) (adapter.Outbound, error) {
 	if err != nil {
 		return nil, E.New("make options:", err)
 	}
-	tag := s.tag + "/" + opt.Tag
+
+	tag := opt.Tag
+	if s.override.AdditionalPrefix != nil {
+		prefix := strings.TrimLeft(*s.override.AdditionalPrefix, " ")
+		if prefix != "" {
+			tag = prefix + tag
+		}
+	}
+
+	if s.override.AdditionalSuffix != nil {
+		suffix := strings.TrimRight(*s.override.AdditionalSuffix, " ")
+		if suffix != "" {
+			tag += suffix
+		}
+	}
+
 	err = s.outbound.Create(
 		s.parentCtx,
 		s.router,

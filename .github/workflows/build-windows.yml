@@ -1,0 +1,184 @@
+name: Windows Build
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "手动指定版本名"
+        required: false
+        type: string
+
+jobs:
+  calculate_version:
+    name: 计算版本号
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.outputs.outputs.version }}
+      commit_id: ${{ steps.outputs.outputs.commit_id }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.24
+      - name: 获取commit id
+        id: get_commit
+        run: |
+          COMMIT_ID=$(git rev-parse --short HEAD)
+          echo "commit_id=$COMMIT_ID" >> "$GITHUB_ENV"
+          echo "COMMIT_ID=$COMMIT_ID" >> "$GITHUB_ENV"
+      - name: 添加远程仓库以获取最新tag
+        run: |
+          # 添加qjebbs仓库以获取最新tag
+          git remote add qjebbs https://github.com/qjebbs/sing-box.git
+          git fetch qjebbs --tags -f
+      - name: 从标签或提交 ID 生成版本号
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.version }}" != "" ]]; then
+            # 使用手动指定的版本号
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_ENV"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # 从当前标签生成版本号
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
+          else
+            # 尝试获取最新的稳定tag版本号（优先从qjebbs仓库获取，过滤alpha/beta/rc版本）
+            QJEBBS_LATEST_TAG=$(git ls-remote --tags qjebbs | grep -v '{}' | cut -d/ -f3 | grep -v -E 'alpha|beta|rc' | sort -V | tail -n1)
+            
+            if [[ -n "$QJEBBS_LATEST_TAG" && "$QJEBBS_LATEST_TAG" =~ ^v.* ]]; then
+              # 去掉前缀v
+              LATEST_VERSION=${QJEBBS_LATEST_TAG#v}
+              echo "qjebbs仓库最新稳定版本: $LATEST_VERSION"
+              echo "version=$LATEST_VERSION" >> "$GITHUB_ENV"
+            else
+              # 如果无法从qjebbs获取，则尝试获取本地最新稳定tag
+              LOCAL_LATEST_TAG=$(git tag -l | grep -v -E 'alpha|beta|rc' | sort -V | tail -n1)
+              
+              if [[ -n "$LOCAL_LATEST_TAG" && "$LOCAL_LATEST_TAG" =~ ^v.* ]]; then
+                # 去掉前缀v
+                LOCAL_VERSION=${LOCAL_LATEST_TAG#v}
+                echo "本地最新稳定版本: $LOCAL_VERSION"
+                echo "version=$LOCAL_VERSION" >> "$GITHUB_ENV"
+              else
+                # 如果没有稳定tag，则使用commit id作为版本号
+                echo "未找到稳定tag，使用commit id作为版本号"
+                echo "version=${{ env.COMMIT_ID }}" >> "$GITHUB_ENV"
+              fi
+            fi
+          fi
+      - name: 设置输出
+        id: outputs
+        run: |
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit_id=${{ env.COMMIT_ID }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: 构建 Windows 64位应用
+    runs-on: windows-latest
+    needs:
+      - calculate_version
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.24
+      - name: 设置环境变量
+        run: |
+          echo "VERSION=${{ needs.calculate_version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "COMMIT_ID=${{ needs.calculate_version.outputs.commit_id }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: 构建 Windows 64位应用
+        run: |
+          go build -v -o dist/sing-box-${{ env.COMMIT_ID }}-windows-amd64/sing-box.exe -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${{ env.VERSION }}'" -tags "with_quic with_grpc with_dhcp with_wireguard with_utls with_acme with_clash_api with_gvisor with_tailscale" ./cmd/sing-box
+      - name: 打包
+        run: |
+          mkdir -p dist/release
+          cd dist/sing-box-${{ env.COMMIT_ID }}-windows-amd64
+          7z a -tzip "../release/sing-box-${{ env.COMMIT_ID }}-windows-amd64.zip" "sing-box.exe"
+      - name: 保存版本信息
+        run: |
+          echo "${{ env.VERSION }}" | Out-File -FilePath "dist/release/version.txt" -Encoding utf8
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-windows-amd64
+          path: |
+            dist/release/sing-box-*-windows-amd64.zip
+            dist/release/version.txt
+
+  publish_prerelease:
+    name: 发布到 GitHub Releases
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs:
+      - calculate_version
+      - build
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: sing-box-windows-amd64
+          path: dist/release
+
+      - name: 计算校验和
+        run: |
+          cd dist/release
+          find . -type f -not -name "checksums.*" -not -name "version.txt" -not -name "commit_id.txt" | sort | xargs sha256sum > checksums.txt
+          cat checksums.txt
+
+      - name: 删除当前 Release 资产
+        uses: dev-drprasad/delete-tag-and-release@v0.2.1
+        with:
+          tag_name: alpha
+          delete_release: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 更新标签
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag: "alpha"
+          force_push_tag: true
+          message: "预发布版本"
+
+      - name: 创建发布说明
+        run: |
+          cat > release.txt << 'EOF'
+          # 预发布版本
+
+          版本号: ${{ needs.calculate_version.outputs.version }}
+          提交ID: ${{ needs.calculate_version.outputs.commit_id }}
+
+          此版本为自动构建的预发布版本，包含最新的64位Windows应用程序。
+          EOF
+
+      - name: 发布到 GitHub Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: alpha
+          name: v${{ needs.calculate_version.outputs.version }}
+          files: |
+            dist/release/*
+          prerelease: true
+          body_path: release.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
