@@ -307,14 +307,14 @@ func (s *Remote) processLine(line string) (adapter.Outbound, error) {
 	}
 
 	tag := opt.Tag
-	if s.override.AdditionalPrefix != nil {
+	if s.override != nil && s.override.AdditionalPrefix != nil {
 		prefix := strings.TrimLeft(*s.override.AdditionalPrefix, " ")
 		if prefix != "" {
 			tag = prefix + tag
 		}
 	}
 
-	if s.override.AdditionalSuffix != nil {
+	if s.override != nil && s.override.AdditionalSuffix != nil {
 		suffix := strings.TrimRight(*s.override.AdditionalSuffix, " ")
 		if suffix != "" {
 			tag += suffix
