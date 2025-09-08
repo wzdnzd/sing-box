@@ -13,10 +13,9 @@ jobs:
       contents: write # 添加写入内容的权限
     steps:
       - name: 检出当前仓库代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.WORKFLOW_TOKEN }} # 使用GitHub提供的token
 
       - name: 配置 Git
         run: |
