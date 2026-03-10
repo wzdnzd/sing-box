@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -11,6 +12,8 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/balancer"
+	tun "github.com/sagernet/sing-tun"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -24,6 +27,7 @@ func RegisterLoadBalance(registry *outbound.Registry) {
 var (
 	_ adapter.Outbound                = (*LoadBalance)(nil)
 	_ adapter.OutboundCheckGroup      = (*LoadBalance)(nil)
+	_ adapter.DirectRouteOutbound     = (*LoadBalance)(nil)
 	_ adapter.SimpleLifecycle         = (*LoadBalance)(nil)
 	_ adapter.InterfaceUpdateListener = (*LoadBalance)(nil)
 )
@@ -146,6 +150,24 @@ func (s *LoadBalance) NewPacketConnectionEx(ctx context.Context, conn N.PacketCo
 	} else {
 		s.connection.NewPacketConnection(ctx, selected, conn, metadata, onClose)
 	}
+}
+
+// NewDirectRouteConnection implements adapter.DirectRouteOutbound
+func (s *LoadBalance) NewDirectRouteConnection(metadata adapter.InboundContext, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
+	ctx := adapter.WithContext(context.Background(), &metadata)
+	destination := metadata.Destination
+	picked := s.Pick(ctx, N.NetworkICMP, destination)
+	if picked == nil {
+		return nil, E.New("no outbound available for network: ", metadata.Network)
+	}
+	if !common.Contains(picked.Network(), metadata.Network) {
+		return nil, E.New(metadata.Network, " is not supported by outbound: ", picked.Tag())
+	}
+	dro, ok := picked.(adapter.DirectRouteOutbound)
+	if !ok {
+		return nil, E.New("outbound does not support direct route: ", picked.Tag())
+	}
+	return dro.NewDirectRouteConnection(metadata, routeContext, timeout)
 }
 
 // Close implements adapter.Service
