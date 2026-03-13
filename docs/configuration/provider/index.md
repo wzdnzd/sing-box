@@ -66,6 +66,14 @@ Exclude regular expression to filter nodes. The priority of the exclude expressi
 
 Include regular expression to filter nodes.
 
+#### dedup_host
+
+Whether to deduplicate nodes with the same protocol and host. The default value is `false`.
+
+#### dedup_host_port
+
+Whether to deduplicate nodes with the same protocol, host and port. The default value is `false`.
+
 #### download_detour
 
 The tag of the outbound used to download from the provider.

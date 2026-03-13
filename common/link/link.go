@@ -30,6 +30,11 @@ func Parse(s string) (Link, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseURL(u)
+}
+
+// ParseURL parses a link url to Link
+func ParseURL(u *url.URL) (Link, error) {
 	ps, err := getParsers(u)
 	if err != nil {
 		return nil, err

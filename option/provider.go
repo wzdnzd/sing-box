@@ -55,4 +55,7 @@ type RemoteProviderOptions struct {
 
 	Exclude string `json:"exclude,omitempty"`
 	Include string `json:"include,omitempty"`
+
+	DedupHost     bool `json:"dedup_host,omitempty"`
+	DedupHostPort bool `json:"dedup_host_port,omitempty"`
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
@@ -54,6 +56,8 @@ type Remote struct {
 	downloadDetour string
 	exclude        *regexp.Regexp
 	include        *regexp.Regexp
+	dedupHost      bool
+	dedupHostPort  bool
 	userAgent      string
 	disableUA      bool
 
@@ -120,6 +124,8 @@ func NewRemote(ctx context.Context, router adapter.Router, logFactory log.Factor
 		disableUA:      options.DisableUserAgent,
 		exclude:        exclude,
 		include:        include,
+		dedupHost:      options.DedupHost,
+		dedupHostPort:  options.DedupHostPort,
 
 		ctx:     ctx,
 		chReady: make(chan struct{}),
@@ -276,14 +282,12 @@ func (s *Remote) Update() error {
 func (s *Remote) updateOutbounds(content string) {
 	outbounds := make([]adapter.Outbound, 0)
 	outboundsByTag := make(map[string]adapter.Outbound)
-	for i, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		outbound, err := s.processLine(line)
+
+	links := s.parseLinks(content, s.dedupHost, s.dedupHostPort)
+	for _, link := range links {
+		outbound, err := s.createOutbound(link)
 		if err != nil {
-			s.logger.Warn("line ", i+1, ": ", err)
+			s.logger.Warn("line ", link.Line, ": ", err)
 			continue
 		}
 		outbounds = append(outbounds, outbound)
@@ -294,14 +298,74 @@ func (s *Remote) updateOutbounds(content string) {
 	s.outboundsByTag = outboundsByTag
 }
 
-func (s *Remote) processLine(line string) (adapter.Outbound, error) {
-	lnk, err := link.Parse(line)
-	if err != nil {
-		return nil, E.New("parse link: ", err)
+type parsedLink struct {
+	Line int
+	URL  *url.URL
+	Link link.Link
+}
+
+func (s *Remote) parseLinks(content string, dedupHost, dedupHostPort bool) []*parsedLink {
+	lines := strings.Split(content, "\n")
+	links := make([]*parsedLink, 0, len(lines))
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		u, err := url.Parse(line)
+		if err != nil {
+			s.logger.Warn("line ", i+1, ": ", err)
+			continue
+		}
+		lnk, err := link.ParseURL(u)
+		if err != nil {
+			s.logger.Warn("line ", i+1, ": ", err)
+			continue
+		}
+		links = append(links, &parsedLink{
+			Line: i + 1,
+			URL:  u,
+			Link: lnk,
+		})
 	}
-	opt, err := lnk.Outbound()
+	if !dedupHost && !dedupHostPort {
+		return links
+	}
+	type hostport struct {
+		scheme string
+		host   string
+		port   string
+	}
+	seen := make(map[hostport]struct{})
+	deduped := make([]*parsedLink, 0, len(links))
+	// reverse the links to keep the last one when deduping, which will remove:
+	// - nodes created duplicated for information display.
+	// - nodes with lower index when the same node appears multiple times.
+	for i := len(links) - 1; i >= 0; i-- {
+		lnk := links[i]
+		hp := hostport{
+			host: lnk.URL.Hostname(),
+			port: lnk.URL.Port(),
+		}
+		hp.scheme = lnk.URL.Scheme
+		hp.host = ""
+		if !dedupHostPort {
+			hp.port = ""
+		}
+		if _, ok := seen[hp]; ok {
+			continue
+		}
+		seen[hp] = struct{}{}
+		deduped = append(deduped, lnk)
+	}
+	s.logger.Info(len(links)-len(deduped), " duplicate outbounds removed")
+	return common.Reverse(deduped)
+}
+
+func (s *Remote) createOutbound(lnk *parsedLink) (adapter.Outbound, error) {
+	opt, err := lnk.Link.Outbound()
 	if err != nil {
-		return nil, E.New("make options:", err)
+		return nil, E.New("line ", lnk.Line, ": make options:", err)
 	}
 	tag := s.tag + "/" + opt.Tag
 	err = s.outbound.Create(
@@ -313,7 +377,7 @@ func (s *Remote) processLine(line string) (adapter.Outbound, error) {
 		opt.Options,
 	)
 	if err != nil {
-		return nil, E.New("create [", tag, "]: ", err)
+		return nil, err
 	}
 	outbound, loaded := s.outbound.Outbound(tag)
 	if !loaded {
