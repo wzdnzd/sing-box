@@ -477,7 +477,7 @@ func (s *StartedService) readGroups() *Groups {
 		var g Group
 		g.Tag = iGroup.Tag()
 		g.Type = iGroup.Type()
-		_, g.Selectable = iGroup.(*group.Selector)
+		_, g.Selectable = iGroup.(*group.SelectorProvider)
 		g.Selected = iGroup.Now()
 		if boxService.cacheFile != nil {
 			if isExpand, loaded := boxService.cacheFile.LoadGroupExpand(g.Tag); loaded {
@@ -494,7 +494,11 @@ func (s *StartedService) readGroups() *Groups {
 			var item GroupItem
 			item.Tag = itemTag
 			item.Type = itemOutbound.Type()
-			if history := historyStorage.LoadURLTestHistory(adapter.OutboundTag(itemOutbound)); history != nil {
+			real, err := adapter.RealOutbound(itemOutbound)
+			if err != nil {
+				real = itemOutbound
+			}
+			if history := historyStorage.LoadURLTestHistory(real.Tag()); history != nil {
 				item.UrlTestTime = history.Time.Unix()
 				item.UrlTestDelay = int32(history.Delay)
 			}
