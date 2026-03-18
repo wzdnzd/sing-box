@@ -2,8 +2,12 @@ package balancer
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
+	"strings"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 )
 
@@ -41,10 +45,30 @@ type Node struct {
 	adapter.Outbound
 	healthcheck.Stats
 
-	Index  int
-	Status Status
+	Index     int
+	RTTSacale float32
+	Status    Status
 
 	rand int
+}
+
+// NewNode creates a new Node with the given outbound and index.
+func NewNode(
+	outbound adapter.Outbound, index int, rttScale float32,
+	stats healthcheck.Stats, status Status,
+) *Node {
+	if rttScale <= 0 {
+		rttScale = 1
+	}
+	return &Node{
+		Outbound:  outbound,
+		Index:     index,
+		RTTSacale: rttScale,
+		Stats:     stats,
+		Status:    status,
+
+		rand: rand.Intn(math.MaxInt32),
+	}
 }
 
 func (n *Node) String() string {
@@ -55,20 +79,28 @@ func (n *Node) String() string {
 	if n.Outbound != nil {
 		tag = n.Outbound.Tag()
 	}
+	if n.RTTSacale <= 0 || n.RTTSacale == 1 {
+		return fmt.Sprintf(
+			"#%d %s [%s] STD=%s AVG=%s Latest=%s FAIL=%d/%d",
+			n.Index, n.Status, tag,
+			n.Deviation, n.Average, n.Latest,
+			n.Fail, n.All,
+		)
+	}
 	return fmt.Sprintf(
-		"#%d %s [%s] STD=%s AVG=%s Latest=%s FAIL=%d/%d",
+		"#%d %s [%s] STD=%s(%s) AVG=%s(%s) Latest=%s FAIL=%d/%d",
 		n.Index, n.Status, tag,
-		n.Deviation, n.Average, n.Latest, n.Fail, n.All,
+
+		n.Deviation, applyFactorToRTT(n.Deviation, n.RTTSacale),
+		n.Average, applyFactorToRTT(n.Average, n.RTTSacale),
+		n.Latest,
+
+		n.Fail, n.All,
 	)
 }
 
-// CalcStatus calculates & updates the status of the node according to the healthcheck statistics
-func (n *Node) CalcStatus(maxRTT healthcheck.RTT, maxFailRate float32) {
-	n.Status = nodeStatus(&n.Stats, maxRTT, maxFailRate)
-}
-
-// nodeStatus tells if a node is alive or qualified according to the healthcheck statistics
-func nodeStatus(s *healthcheck.Stats, maxRTT healthcheck.RTT, maxFailRate float32) Status {
+// calcStatus tells if a node is alive or qualified according to the healthcheck statistics
+func calcStatus(s *healthcheck.Stats, factor float32, maxRTT healthcheck.RTT, maxFailRate float32) Status {
 	if s.All == 0 {
 		// untetsted
 		return StatusUnknown
@@ -79,8 +111,28 @@ func nodeStatus(s *healthcheck.Stats, maxRTT healthcheck.RTT, maxFailRate float3
 	if s.Fail > 0 && float32(s.Fail)/float32(s.All) > maxFailRate {
 		return StatusAlive
 	}
-	if maxRTT > 0 && s.Average > maxRTT {
+	if maxRTT > 0 && applyFactorToRTT(s.Average, factor) > maxRTT {
 		return StatusAlive
 	}
 	return StatusQualified
+}
+
+func applyFactorToRTT(rtt healthcheck.RTT, scale float32) healthcheck.RTT {
+	if scale <= 0 || scale == 1 {
+		return rtt
+	}
+	return healthcheck.RTT(float32(rtt) * scale)
+}
+
+func calcFactor(tag string, biases []option.LoadBalancePickBias) float32 {
+	factor := float32(1)
+	for _, bias := range biases {
+		if bias.Contains == "" || bias.RTTScale <= 0 {
+			continue
+		}
+		if strings.Contains(tag, bias.Contains) {
+			factor *= bias.RTTScale
+		}
+	}
+	return factor
 }

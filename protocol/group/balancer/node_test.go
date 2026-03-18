@@ -1,9 +1,8 @@
-package balancer_test
+package balancer
 
 import (
 	"testing"
 
-	"github.com/sagernet/sing-box/protocol/group/balancer"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 )
 
@@ -13,46 +12,46 @@ func TestNodeStatus(t *testing.T) {
 	var maxFailRate float32 = 0.2
 	testCases := []struct {
 		name   string
-		status balancer.Status
+		status Status
 		stats  healthcheck.Stats
 	}{
 		{
-			"nil RTTStorage", balancer.StatusUnknown, healthcheck.Stats{
+			"nil RTTStorage", StatusUnknown, healthcheck.Stats{
 				All: 0, Fail: 0, Latest: 0, Average: 0,
 			},
 		},
 		{
-			"untested", balancer.StatusUnknown, healthcheck.Stats{
+			"untested", StatusUnknown, healthcheck.Stats{
 				All: 0, Fail: 0, Latest: 0, Average: 0,
 			},
 		},
 		{
-			"@max_rtt", balancer.StatusQualified, healthcheck.Stats{
+			"@max_rtt", StatusQualified, healthcheck.Stats{
 				All: 10, Fail: 0, Latest: healthcheck.Second, Average: healthcheck.Second,
 			},
 		},
 		{
-			"@max_fail", balancer.StatusQualified, healthcheck.Stats{
+			"@max_fail", StatusQualified, healthcheck.Stats{
 				All: 10, Fail: 2, Latest: healthcheck.Second, Average: healthcheck.Second,
 			},
 		},
 		{
-			"@max_fail_2", balancer.StatusQualified, healthcheck.Stats{
+			"@max_fail_2", StatusQualified, healthcheck.Stats{
 				All: 5, Fail: 1, Latest: healthcheck.Second, Average: healthcheck.Second,
 			},
 		},
 		{
-			"latest_fail", balancer.StatusDead, healthcheck.Stats{
+			"latest_fail", StatusDead, healthcheck.Stats{
 				All: 10, Fail: 1, Latest: healthcheck.Failed, Average: healthcheck.Second,
 			},
 		},
 		{
-			"over max_fail", balancer.StatusAlive, healthcheck.Stats{
+			"over max_fail", StatusAlive, healthcheck.Stats{
 				All: 5, Fail: 2, Latest: healthcheck.Second, Average: healthcheck.Second,
 			},
 		},
 		{
-			"over max_rtt", balancer.StatusAlive, healthcheck.Stats{
+			"over max_rtt", StatusAlive, healthcheck.Stats{
 				All: 10, Fail: 0, Latest: healthcheck.Second, Average: 2 * healthcheck.Second,
 			},
 		},
@@ -61,10 +60,9 @@ func TestNodeStatus(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			node := &balancer.Node{Stats: tc.stats}
-			node.CalcStatus(maxRTT, maxFailRate)
-			if node.Status != tc.status {
-				t.Errorf("want: %s, got: %s", tc.status, node.Status)
+			got := calcStatus(&tc.stats, 1, maxRTT, maxFailRate)
+			if got != tc.status {
+				t.Errorf("want: %s, got: %s", tc.status, got)
 			}
 		})
 	}

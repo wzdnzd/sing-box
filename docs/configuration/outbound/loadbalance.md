@@ -38,6 +38,12 @@
       "200ms",
       "250ms",
       "350ms"
+    ],
+    "biases": [
+      {
+        "contains": "keyword-a",
+        "rtt_scale": 10
+      }
     ]
   }
 }
@@ -181,3 +187,11 @@ Here are typical configuration for `leastload`:
 1. `expected:3, baselines =["30ms","50ms","100ms"]`, try different baselines until we find at least 3 nodes. Otherwise select the top 3 nodes with the smallest STD. The advantage is that it can find a proper quantity of nodes without wasting nodes with similar qualities.
 
 1. `baselines: ["30ms","50ms","100ms"]`, try to select nodes by different baselines. If there is no node matching any baseline, return the one with the smallest STD.
+
+#### biases
+
+The picking bias of load balancing. Default is empty.
+
+When the node tag contains the `contains` field, its round-trip time (or standard deviation) will be multiplied by `rtt_scale` for comparison when picking.
+The default value of `rtt_scale` is `1`, and the larger it is, the less preferred the node is. 
+For example, `rtt_scale: 10` means that when the node's round-trip time is `100ms`, it will be treated as `1000ms` for comparison.

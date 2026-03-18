@@ -2,8 +2,6 @@ package balancer
 
 import (
 	"context"
-	"math"
-	"math/rand"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -71,14 +69,14 @@ func New(
 		objective = NewLeastObjective(
 			options.Check.Sampling, options.Pick,
 			func(node *Node) healthcheck.RTT {
-				return node.Deviation
+				return applyFactorToRTT(node.Deviation, node.RTTSacale)
 			},
 		)
 	case ObjectiveLeastPing:
 		objective = NewLeastObjective(
 			options.Check.Sampling, options.Pick,
 			func(node *Node) healthcheck.RTT {
-				return node.Average
+				return applyFactorToRTT(node.Average, node.RTTSacale)
 			},
 		)
 	default:
@@ -149,12 +147,7 @@ func (b *Balancer) Nodes(network string) []*Node {
 	for _, provider := range b.providers {
 		for _, outbound := range provider.Outbounds() {
 			idx++
-			node := &Node{
-				Outbound: outbound,
-				Index:    idx,
-				rand:     rand.Intn(math.MaxInt32),
-			}
-			networks := node.Network()
+			networks := outbound.Network()
 			if network != "" && !common.Contains(networks, network) {
 				continue
 			}
@@ -165,8 +158,10 @@ func (b *Balancer) Nodes(network string) []*Node {
 				}
 				outbound = real
 			}
-			node.Stats = b.HealthCheck.Storage.Stats(outbound.Tag())
-			node.CalcStatus(b.maxRTT, b.maxFailRate)
+			scale := calcFactor(outbound.Tag(), b.options.Pick.Biases)
+			stats := b.HealthCheck.Storage.Stats(outbound.Tag())
+			status := calcStatus(&stats, scale, b.maxRTT, b.maxFailRate)
+			node := NewNode(outbound, idx, scale, stats, status)
 			all = append(all, node)
 		}
 	}

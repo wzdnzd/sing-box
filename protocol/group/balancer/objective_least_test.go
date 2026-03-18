@@ -120,7 +120,7 @@ func TestLeastSort(t *testing.T) {
 	}
 	if t.Failed() {
 		for _, node := range nodes {
-			t.Logf(node.String())
+			t.Log(node.String())
 		}
 		t.Logf("want: %v", want)
 	}

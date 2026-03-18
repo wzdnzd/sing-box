@@ -23,6 +23,14 @@ type LoadBalancePickOptions struct {
 	Expected uint `json:"expected,omitempty"`
 	// ping rtt baselines
 	Baselines []badoption.Duration `json:"baselines,omitempty"`
+	// pick biases
+	Biases []LoadBalancePickBias `json:"biases,omitempty"`
+}
+
+// LoadBalancePickBias is the bias for load balance picking
+type LoadBalancePickBias struct {
+	Contains string  `json:"contains,omitempty"`
+	RTTScale float32 `json:"rtt_scale,omitempty"`
 }
 
 // HealthCheckOptions is the settings for health check
