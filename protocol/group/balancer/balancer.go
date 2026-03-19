@@ -182,11 +182,12 @@ func (b *Balancer) availableNetworks() []string {
 	}
 }
 
-// LogNodes logs all nodes status
-func (b *Balancer) LogNodes() {
-	all := b.Nodes("")
+// LogNodesAndReturn logs all nodes status and returns the list of nodes sorted by the objective.
+// The available nodes are in front of the slice, and the unavailable nodes are in the back.
+func (b *Balancer) LogNodesAndReturn() (all []*Node, available int) {
+	all = b.Nodes("")
 	filtered := b.objective.Filter(all)
-	available := len(filtered)
+	available = len(filtered)
 	b.logger.Info(
 		b.cfg.Pick.Objective, "/", b.cfg.Pick.Strategy, ", ",
 		available, " of ", len(all), " nodes available",
@@ -199,6 +200,7 @@ func (b *Balancer) LogNodes() {
 		}
 		b.logger.Info(n.String())
 	}
+	return all, available
 }
 
 // InterfaceUpdated implements adapter.InterfaceUpdateListener

@@ -71,8 +71,13 @@ func (s *LoadBalance) Now() string {
 
 // All implements adapter.OutboundGroup
 func (s *LoadBalance) All() []string {
-	s.LogNodes()
-	return s.GroupAdapter.All()
+	// s.LogNodes()
+	// return s.GroupAdapter.All()
+
+	all, _ := s.LogNodesAndReturn()
+	return common.Map(all, func(node *balancer.Node) string {
+		return node.Tag()
+	})
 }
 
 // Network implements adapter.OutboundGroup
