@@ -98,8 +98,13 @@ func (n *Node) String() string {
 	)
 }
 
+// ScaleRTT returns the RTT after applying the scale factor of this node.
+func (n *Node) ScaleRTT(rtt healthcheck.RTT) healthcheck.RTT {
+	return applyFactorToRTT(rtt, n.RTTSacale)
+}
+
 // calcStatus tells if a node is alive or qualified according to the healthcheck statistics
-func calcStatus(s *healthcheck.Stats, factor float32, maxRTT healthcheck.RTT, maxFailRate float32) Status {
+func calcStatus(s *healthcheck.Stats, maxRTT healthcheck.RTT, maxFailRate float32) Status {
 	if s.All == 0 {
 		// untetsted
 		return StatusUnknown
@@ -110,7 +115,8 @@ func calcStatus(s *healthcheck.Stats, factor float32, maxRTT healthcheck.RTT, ma
 	if s.Fail > 0 && float32(s.Fail)/float32(s.All) > maxFailRate {
 		return StatusAlive
 	}
-	if maxRTT > 0 && applyFactorToRTT(s.Average, factor) > maxRTT {
+	// don't apply RTT scale to maxRTT, because it's a threshold, not a score
+	if maxRTT > 0 && s.Average > maxRTT {
 		return StatusAlive
 	}
 	return StatusQualified

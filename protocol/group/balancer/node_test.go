@@ -60,7 +60,7 @@ func TestNodeStatus(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := calcStatus(&tc.stats, 1, maxRTT, maxFailRate)
+			got := calcStatus(&tc.stats, maxRTT, maxFailRate)
 			if got != tc.status {
 				t.Errorf("want: %s, got: %s", tc.status, got)
 			}

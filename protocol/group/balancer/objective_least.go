@@ -17,8 +17,22 @@ type LeastObjective struct {
 	rttFunc   func(node *Node) healthcheck.RTT
 }
 
+// NewLeastLoadObjective returns a new LeastObjective.
+func NewLeastLoadObjective(options option.LoadBalancePickOptions) *LeastObjective {
+	return NewLeastObjective(options, func(node *Node) healthcheck.RTT {
+		return node.ScaleRTT(node.Deviation)
+	})
+}
+
+// NewLeastPingObjective returns a new LeastObjective.
+func NewLeastPingObjective(options option.LoadBalancePickOptions) *LeastObjective {
+	return NewLeastObjective(options, func(node *Node) healthcheck.RTT {
+		return node.ScaleRTT(node.Average)
+	})
+}
+
 // NewLeastObjective returns a new LeastObjective
-func NewLeastObjective(sampling uint, options option.LoadBalancePickOptions, rttFunc func(node *Node) healthcheck.RTT) *LeastObjective {
+func NewLeastObjective(options option.LoadBalancePickOptions, rttFunc func(node *Node) healthcheck.RTT) *LeastObjective {
 	return &LeastObjective{
 		QualifiedObjective: NewQualifiedObjective(),
 		expected:           int(options.Expected),

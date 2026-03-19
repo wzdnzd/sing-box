@@ -59,19 +59,9 @@ func New(
 	case ObjectiveQualified:
 		objective = NewQualifiedObjective()
 	case ObjectiveLeastLoad:
-		objective = NewLeastObjective(
-			options.Check.Sampling, options.Pick,
-			func(node *Node) healthcheck.RTT {
-				return applyFactorToRTT(node.Deviation, node.RTTSacale)
-			},
-		)
+		objective = NewLeastLoadObjective(options.Pick)
 	case ObjectiveLeastPing:
-		objective = NewLeastObjective(
-			options.Check.Sampling, options.Pick,
-			func(node *Node) healthcheck.RTT {
-				return applyFactorToRTT(node.Average, node.RTTSacale)
-			},
-		)
+		objective = NewLeastPingObjective(options.Pick)
 	default:
 		return nil, E.New("unknown objective: ", cfg.Pick.Objective)
 	}
@@ -147,7 +137,7 @@ func (b *Balancer) Nodes(network string) []*Node {
 			}
 			scale := calcFactor(outbound.Tag(), b.cfg.pickBiases)
 			stats := b.HealthCheck.Storage.Stats(outbound.Tag())
-			status := calcStatus(&stats, scale, healthcheck.RTT(b.cfg.Pick.MaxRTT), b.cfg.maxFailRate)
+			status := calcStatus(&stats, b.cfg.maxRTT, b.cfg.maxFailRate)
 			node := NewNode(outbound, idx, scale, stats, status)
 			all = append(all, node)
 		}

@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 	"github.com/sagernet/sing/common/json/badoption"
 )
 
 type balancerConfig struct {
 	option.LoadBalanceOutboundOptions
+	maxRTT      healthcheck.RTT
 	maxFailRate float32
 	pickBiases  []pickBias
 }
@@ -35,6 +37,7 @@ func configFromOptions(options option.LoadBalanceOutboundOptions) (balancerConfi
 	if options.Check.Sampling > 0 {
 		cfg.maxFailRate = float32(options.Pick.MaxFail) / float32(options.Check.Sampling)
 	}
+	cfg.maxRTT = healthcheck.RTT(options.Pick.MaxRTT.Build().Milliseconds())
 
 	for _, bias := range options.Pick.Biases {
 		var re *regexp.Regexp
