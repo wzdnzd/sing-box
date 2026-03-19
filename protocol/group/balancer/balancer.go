@@ -2,7 +2,6 @@ package balancer
 
 import (
 	"context"
-	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/log"
@@ -10,7 +9,6 @@ import (
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/sagernet/sing/common/json/badoption"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -23,14 +21,12 @@ type Balancer struct {
 
 	providers []adapter.Provider
 	logger    log.ContextLogger
-	options   *option.LoadBalanceOutboundOptions
+	cfg       balancerConfig
 
 	objective Objective
 	strategy  Strategy
 
-	maxRTT      healthcheck.RTT
-	maxFailRate float32
-	networks    []string
+	networks []string
 }
 
 // New creates a new load balancer
@@ -49,18 +45,15 @@ func New(
 	if options == nil {
 		options = &option.LoadBalanceOutboundOptions{}
 	}
-	if options.Pick.Strategy == "" {
-		options.Pick.Strategy = StrategyRandom
+	cfg, err := configFromOptions(*options)
+	if err != nil {
+		return nil, err
 	}
-	if options.Pick.Objective == "" {
-		options.Pick.Objective = ObjectiveAlive
-	}
-
 	var (
 		objective Objective
 		strategy  Strategy
 	)
-	switch options.Pick.Objective {
+	switch cfg.Pick.Objective {
 	case ObjectiveAlive:
 		objective = NewAliveObjective()
 	case ObjectiveQualified:
@@ -80,39 +73,33 @@ func New(
 			},
 		)
 	default:
-		return nil, E.New("unknown objective: ", options.Pick.Objective)
+		return nil, E.New("unknown objective: ", cfg.Pick.Objective)
 	}
-	switch options.Pick.Strategy {
+	switch cfg.Pick.Strategy {
 	case StrategyRandom:
 		strategy = NewRandomStrategy()
 	case StrategyRoundrobin:
 		strategy = NewRoundRobinStrategy()
 	case StrategyConsistentHash:
-		if options.Pick.Objective != ObjectiveAlive {
+		if cfg.Pick.Objective != ObjectiveAlive {
 			return nil, E.New("consistenthash strategy works only with 'alive' objective")
 		}
 		strategy = NewConsistentHashStrategy()
 	default:
-		return nil, E.New("unknown strategy: ", options.Pick.Strategy)
+		return nil, E.New("unknown strategy: ", cfg.Pick.Strategy)
 	}
 
-	if options.Check.Interval == 0 {
-		options.Check.Interval = badoption.Duration(5 * time.Minute)
-	}
 	// healthcheck.New() may apply default values to options, e.g. the `sampling` which
 	// is used to calculate the maxFailRate.
 	hc := healthcheck.New(ctx, router, outbound, providers, &options.Check, logger)
 
 	return &Balancer{
-		options:     options,
+		cfg:         cfg,
 		logger:      logger,
 		providers:   providers,
 		HealthCheck: hc,
 		objective:   objective,
 		strategy:    strategy,
-
-		maxRTT:      healthcheck.RTTOf(options.Pick.MaxRTT),
-		maxFailRate: float32(options.Pick.MaxFail) / float32(options.Check.Sampling),
 	}, nil
 }
 
@@ -158,9 +145,9 @@ func (b *Balancer) Nodes(network string) []*Node {
 				}
 				outbound = real
 			}
-			scale := calcFactor(outbound.Tag(), b.options.Pick.Biases)
+			scale := calcFactor(outbound.Tag(), b.cfg.pickBiases)
 			stats := b.HealthCheck.Storage.Stats(outbound.Tag())
-			status := calcStatus(&stats, scale, b.maxRTT, b.maxFailRate)
+			status := calcStatus(&stats, scale, healthcheck.RTT(b.cfg.Pick.MaxRTT), b.cfg.maxFailRate)
 			node := NewNode(outbound, idx, scale, stats, status)
 			all = append(all, node)
 		}
@@ -201,7 +188,7 @@ func (b *Balancer) LogNodes() {
 	filtered := b.objective.Filter(all)
 	available := len(filtered)
 	b.logger.Info(
-		b.options.Pick.Objective, "/", b.options.Pick.Strategy, ", ",
+		b.cfg.Pick.Objective, "/", b.cfg.Pick.Strategy, ", ",
 		available, " of ", len(all), " nodes available",
 	)
 	b.logger.Info("=== nodes available ===")
@@ -221,5 +208,4 @@ func (b *Balancer) InterfaceUpdated() {
 		return
 	}
 	go b.HealthCheck.CheckAll(context.Background())
-	return
 }

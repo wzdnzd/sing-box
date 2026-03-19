@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 )
 
@@ -124,15 +123,29 @@ func applyFactorToRTT(rtt healthcheck.RTT, scale float32) healthcheck.RTT {
 	return healthcheck.RTT(float32(rtt) * scale)
 }
 
-func calcFactor(tag string, biases []option.LoadBalancePickBias) float32 {
+func calcFactor(tag string, biases []pickBias) float32 {
 	factor := float32(1)
 	for _, bias := range biases {
-		if bias.Contains == "" || bias.RTTScale <= 0 {
+		if bias.RTTScale <= 0 || bias.RTTScale == 1 || !matchTag(tag, bias) {
 			continue
 		}
-		if strings.Contains(tag, bias.Contains) {
-			factor *= bias.RTTScale
-		}
+		factor *= bias.RTTScale
 	}
 	return factor
+}
+
+func matchTag(tag string, condition pickBias) bool {
+	if condition.Contains != "" {
+		return strings.Contains(tag, condition.Contains)
+	}
+	if condition.Prefix != "" {
+		return strings.HasPrefix(tag, condition.Prefix)
+	}
+	if condition.Suffix != "" {
+		return strings.HasSuffix(tag, condition.Suffix)
+	}
+	if condition.Regexp != nil {
+		return condition.Regexp.MatchString(tag)
+	}
+	return false
 }

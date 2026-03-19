@@ -29,8 +29,16 @@ type LoadBalancePickOptions struct {
 
 // LoadBalancePickBias is the bias for load balance picking
 type LoadBalancePickBias struct {
-	Contains string  `json:"contains,omitempty"`
+	MatchCondition
 	RTTScale float32 `json:"rtt_scale,omitempty"`
+}
+
+// MatchCondition is the condition to match a node tag
+type MatchCondition struct {
+	Contains string `json:"contains,omitempty"`
+	Prefix   string `json:"prefix,omitempty"`
+	Suffix   string `json:"suffix,omitempty"`
+	Regexp   string `json:"regexp,omitempty"`
 }
 
 // HealthCheckOptions is the settings for health check

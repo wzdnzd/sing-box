@@ -41,7 +41,10 @@
     ],
     "biases": [
       {
-        "contains": "keyword-a",
+        "contains": "keyword",
+        "prefix": "",
+        "suffix": "",
+        "regexp": "",
         "rtt_scale": 10
       }
     ]
@@ -192,6 +195,13 @@ Shadowsocks (A) ---> Trojan [B.Node]
 
 负载均衡的挑选偏好。默认为空。
 
-当节点标签包含 `contains` 字段时，挑选时会将该节点的往返时间(或标准差)乘以 `rtt_scale` 进行比较。
+当节点标签匹配 `biases` 中的条件时，挑选时会将该节点的往返时间(或标准差)乘以 `rtt_scale` 进行比较。
 `rtt_scale` 默认为 `1`，越大表示越不偏好该节点。
 举例来说，`rtt_scale: 10` 表示当节点的往返时间为 `100ms` 时，比较时将其视为 `1000ms`。
+
+- `contains` 表示节点标签包含某个关键词时匹配。
+- `prefix` 表示节点标签以某个关键词开头时匹配。
+- `suffix` 表示节点标签以某个关键词结尾时匹配。
+- `regexp` 表示节点标签匹配某个正则表达式时匹配。
+
+如果配置了多个条件，满足任一条件即可匹配。

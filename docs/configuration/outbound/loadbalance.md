@@ -41,7 +41,10 @@
     ],
     "biases": [
       {
-        "contains": "keyword-a",
+        "contains": "keyword",
+        "prefix": "",
+        "suffix": "",
+        "regexp": "",
         "rtt_scale": 10
       }
     ]
@@ -192,6 +195,14 @@ Here are typical configuration for `leastload`:
 
 The picking bias of load balancing. Default is empty.
 
-When the node tag contains the `contains` field, its round-trip time (or standard deviation) will be multiplied by `rtt_scale` for comparison when picking.
+When the node tag matches the condition in `biases`,
+its round-trip time (or standard deviation) will be multiplied by `rtt_scale` for comparison when picking.
 The default value of `rtt_scale` is `1`, and the larger it is, the less preferred the node is. 
 For example, `rtt_scale: 10` means that when the node's round-trip time is `100ms`, it will be treated as `1000ms` for comparison.
+
+- `contains` means matching when the node tag contains a keyword.
+- `prefix` means matching when the node tag starts with a keyword.
+- `suffix` means matching when the node tag ends with a keyword.
+- `regexp` means matching when the node tag matches a regular expression.
+
+If multiple conditions are configured, matching any one of them is sufficient.
