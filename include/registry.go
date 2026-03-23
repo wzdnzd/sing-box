@@ -88,6 +88,7 @@ func OutboundRegistry() *outbound.Registry {
 	group.RegisterSelectorProvider(registry)
 	group.RegisterURLTestProvider(registry)
 	group.RegisterLoadBalance(registry)
+	group.RegisterLoadBalanceProfile(registry)
 	group.RegisterChain(registry)
 
 	socks.RegisterOutbound(registry)

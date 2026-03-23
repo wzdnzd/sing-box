@@ -1,16 +1,15 @@
 package balancer
 
 import (
+	"errors"
 	"regexp"
-	"time"
 
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
-	"github.com/sagernet/sing/common/json/badoption"
 )
 
 type balancerConfig struct {
-	option.LoadBalanceOutboundOptions
+	option.LoadBalancePickOptions
 	maxRTT      healthcheck.RTT
 	maxFailRate float32
 	pickBiases  []pickBias
@@ -21,25 +20,23 @@ type pickBias struct {
 	Regexp *regexp.Regexp
 }
 
-func configFromOptions(options option.LoadBalanceOutboundOptions) (balancerConfig, error) {
-	if options.Pick.Strategy == "" {
-		options.Pick.Strategy = StrategyRandom
+func configFromOptions(sampling int, options option.LoadBalancePickOptions) (balancerConfig, error) {
+	if sampling <= 0 {
+		return balancerConfig{}, errors.New("sampling must be greater than 0")
 	}
-	if options.Pick.Objective == "" {
-		options.Pick.Objective = ObjectiveAlive
+	if options.Strategy == "" {
+		options.Strategy = StrategyRandom
 	}
-	if options.Check.Interval <= 0 {
-		options.Check.Interval = badoption.Duration(5 * time.Minute)
+	if options.Objective == "" {
+		options.Objective = ObjectiveAlive
 	}
 
 	var cfg balancerConfig
-	cfg.LoadBalanceOutboundOptions = options
-	if options.Check.Sampling > 0 {
-		cfg.maxFailRate = float32(options.Pick.MaxFail) / float32(options.Check.Sampling)
-	}
-	cfg.maxRTT = healthcheck.RTT(options.Pick.MaxRTT.Build().Milliseconds())
+	cfg.LoadBalancePickOptions = options
+	cfg.maxFailRate = float32(options.MaxFail) / float32(sampling)
+	cfg.maxRTT = healthcheck.RTT(options.MaxRTT.Build().Milliseconds())
 
-	for _, bias := range options.Pick.Biases {
+	for _, bias := range options.Biases {
 		var re *regexp.Regexp
 		if bias.Regexp != "" {
 			var err error

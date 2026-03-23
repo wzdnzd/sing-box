@@ -45,7 +45,7 @@ type SelectorProvider struct {
 
 func NewSelectorProvider(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.ProviderSelectorOptions) (adapter.Outbound, error) {
 	SelectorProvider := &SelectorProvider{
-		GroupAdapter:                 outbound.NewGroupAdapter(C.TypeSelector, tag, []string{N.NetworkTCP, N.NetworkUDP}, router, options.ProviderGroupCommonOption),
+		GroupAdapter:                 outbound.NewGroupAdapter(C.TypeSelector, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.ProviderGroupCommonOption),
 		ctx:                          ctx,
 		logger:                       logger,
 		outbound:                     service.FromContext[adapter.OutboundManager](ctx),

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
@@ -18,10 +19,10 @@ var _ adapter.InterfaceUpdateListener = (*Balancer)(nil)
 // Balancer is the load balancer
 type Balancer struct {
 	*healthcheck.HealthCheck
+	Adapter *outbound.GroupAdapter
 
-	providers []adapter.Provider
-	logger    log.ContextLogger
-	cfg       balancerConfig
+	logger log.ContextLogger
+	cfg    balancerConfig
 
 	objective Objective
 	strategy  Strategy
@@ -36,16 +37,12 @@ type Balancer struct {
 // history storage since different ones can have different check destinations,
 // sampling numbers, etc.
 func New(
-	ctx context.Context,
-	router adapter.Router,
-	outbound adapter.OutboundManager,
-	providers []adapter.Provider,
-	options *option.LoadBalanceOutboundOptions, logger log.ContextLogger,
+	logger log.ContextLogger,
+	adapter *outbound.GroupAdapter,
+	hc *healthcheck.HealthCheck,
+	options option.LoadBalancePickOptions,
 ) (*Balancer, error) {
-	if options == nil {
-		options = &option.LoadBalanceOutboundOptions{}
-	}
-	cfg, err := configFromOptions(*options)
+	cfg, err := configFromOptions(hc.Storage.Cap(), options)
 	if err != nil {
 		return nil, err
 	}
@@ -53,40 +50,36 @@ func New(
 		objective Objective
 		strategy  Strategy
 	)
-	switch cfg.Pick.Objective {
+	switch cfg.Objective {
 	case ObjectiveAlive:
 		objective = NewAliveObjective()
 	case ObjectiveQualified:
 		objective = NewQualifiedObjective()
 	case ObjectiveLeastLoad:
-		objective = NewLeastLoadObjective(options.Pick)
+		objective = NewLeastLoadObjective(options)
 	case ObjectiveLeastPing:
-		objective = NewLeastPingObjective(options.Pick)
+		objective = NewLeastPingObjective(options)
 	default:
-		return nil, E.New("unknown objective: ", cfg.Pick.Objective)
+		return nil, E.New("unknown objective: ", cfg.Objective)
 	}
-	switch cfg.Pick.Strategy {
+	switch cfg.Strategy {
 	case StrategyRandom:
 		strategy = NewRandomStrategy()
 	case StrategyRoundrobin:
 		strategy = NewRoundRobinStrategy()
 	case StrategyConsistentHash:
-		if cfg.Pick.Objective != ObjectiveAlive {
+		if cfg.Objective != ObjectiveAlive {
 			return nil, E.New("consistenthash strategy works only with 'alive' objective")
 		}
 		strategy = NewConsistentHashStrategy()
 	default:
-		return nil, E.New("unknown strategy: ", cfg.Pick.Strategy)
+		return nil, E.New("unknown strategy: ", cfg.Strategy)
 	}
-
-	// healthcheck.New() may apply default values to options, e.g. the `sampling` which
-	// is used to calculate the maxFailRate.
-	hc := healthcheck.New(ctx, router, outbound, providers, &options.Check, logger)
 
 	return &Balancer{
 		cfg:         cfg,
 		logger:      logger,
-		providers:   providers,
+		Adapter:     adapter,
 		HealthCheck: hc,
 		objective:   objective,
 		strategy:    strategy,
@@ -121,7 +114,7 @@ func (b *Balancer) Networks() []string {
 func (b *Balancer) Nodes(network string) []*Node {
 	all := make([]*Node, 0)
 	idx := 0
-	for _, provider := range b.providers {
+	for _, provider := range b.Adapter.Providers() {
 		for _, outbound := range provider.Outbounds() {
 			idx++
 			networks := outbound.Network()
@@ -179,7 +172,7 @@ func (b *Balancer) LogNodesAndReturn() (all []*Node, available int) {
 	filtered := b.objective.Filter(all)
 	available = len(filtered)
 	b.logger.Info(
-		b.cfg.Pick.Objective, "/", b.cfg.Pick.Strategy, ", ",
+		b.cfg.Objective, "/", b.cfg.Strategy, ", ",
 		available, " of ", len(all), " nodes available",
 	)
 	b.logger.Info("=== nodes available ===")

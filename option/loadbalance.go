@@ -9,6 +9,12 @@ type LoadBalanceOutboundOptions struct {
 	Pick  LoadBalancePickOptions `json:"pick,omitempty"`
 }
 
+// LoadBalanceProfileOutboundOptions is the options for load balance profile
+type LoadBalanceProfileOutboundOptions struct {
+	LoadBalanceTag string                 `json:"loadbalance_tag,omitempty"`
+	Pick           LoadBalancePickOptions `json:"pick,omitempty"`
+}
+
 // LoadBalancePickOptions is the options for balancer outbound picking
 type LoadBalancePickOptions struct {
 	// load balance objective

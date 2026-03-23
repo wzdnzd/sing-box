@@ -49,7 +49,7 @@ func (a *Adapter) Dependencies() []string {
 
 func NewGroupAdapter(
 	outboundType string, outboundTag string, network []string,
-	router adapter.Router, options option.ProviderGroupCommonOption,
+	options option.ProviderGroupCommonOption,
 	extraDeps ...string,
 ) GroupAdapter {
 	deps := options.Outbounds
@@ -58,7 +58,6 @@ func NewGroupAdapter(
 	}
 	adapter := GroupAdapter{
 		Adapter: NewAdapter(outboundType, outboundTag, network, deps),
-		router:  router,
 		options: options,
 	}
 	return adapter
@@ -67,7 +66,6 @@ func NewGroupAdapter(
 type GroupAdapter struct {
 	Adapter
 
-	router         adapter.Router
 	options        option.ProviderGroupCommonOption
 	providers      []adapter.Provider
 	providersByTag map[string]adapter.Provider

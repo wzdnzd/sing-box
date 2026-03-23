@@ -24,6 +24,11 @@ func NewStorages(cap uint, validity time.Duration) *Storages {
 	}
 }
 
+// Cap returns the capacity of each storage
+func (s *Storages) Cap() int {
+	return int(s.cap)
+}
+
 // Latest gets the latest history for the tag
 func (s *Storages) Latest(tag string) *History {
 	s.RLock()

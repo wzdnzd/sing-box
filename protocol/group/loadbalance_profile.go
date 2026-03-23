@@ -12,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/balancer"
-	"github.com/sagernet/sing-box/protocol/group/healthcheck"
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -21,52 +20,46 @@ import (
 	"github.com/sagernet/sing/service"
 )
 
-func RegisterLoadBalance(registry *outbound.Registry) {
-	outbound.Register[option.LoadBalanceOutboundOptions](registry, C.TypeLoadBalance, NewLoadBalance)
+func RegisterLoadBalanceProfile(registry *outbound.Registry) {
+	outbound.Register(registry, C.TypeLoadBalanceProfile, NewLoadBalanceProfile)
 }
 
 var (
-	_ adapter.Outbound                = (*LoadBalance)(nil)
-	_ adapter.OutboundCheckGroup      = (*LoadBalance)(nil)
-	_ adapter.DirectRouteOutbound     = (*LoadBalance)(nil)
-	_ adapter.SimpleLifecycle         = (*LoadBalance)(nil)
-	_ adapter.InterfaceUpdateListener = (*LoadBalance)(nil)
+	_ adapter.Outbound                = (*LoadBalanceProfile)(nil)
+	_ adapter.OutboundCheckGroup      = (*LoadBalanceProfile)(nil)
+	_ adapter.DirectRouteOutbound     = (*LoadBalanceProfile)(nil)
+	_ adapter.SimpleLifecycle         = (*LoadBalanceProfile)(nil)
+	_ adapter.InterfaceUpdateListener = (*LoadBalanceProfile)(nil)
 )
 
-// LoadBalance is a load balance group
-type LoadBalance struct {
-	outbound.GroupAdapter
+// LoadBalanceProfile is a load balance group
+type LoadBalanceProfile struct {
+	profileAdapter
 	*balancer.Balancer
 
 	ctx        context.Context
-	router     adapter.Router
 	logger     log.ContextLogger
 	outbound   adapter.OutboundManager
-	provider   adapter.ProviderManager
 	connection adapter.ConnectionManager
-	options    option.LoadBalanceOutboundOptions
+	options    option.LoadBalanceProfileOutboundOptions
 }
 
-// NewLoadBalance creates a new load balance outbound
-func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
-	return &LoadBalance{
-		GroupAdapter: outbound.NewGroupAdapter(
-			C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP},
-			options.ProviderGroupCommonOption,
-			options.Check.DetourOf...,
+// NewLoadBalanceProfile creates a new load balance outbound
+func NewLoadBalanceProfile(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceProfileOutboundOptions) (adapter.Outbound, error) {
+	return &LoadBalanceProfile{
+		profileAdapter: *newProfileAdapter(
+			C.TypeLoadBalanceProfile, tag, []string{options.LoadBalanceTag},
 		),
 		ctx:        ctx,
-		router:     router,
 		logger:     logger,
 		outbound:   service.FromContext[adapter.OutboundManager](ctx),
-		provider:   service.FromContext[adapter.ProviderManager](ctx),
 		connection: service.FromContext[adapter.ConnectionManager](ctx),
 		options:    options,
 	}, nil
 }
 
 // Now implements adapter.OutboundGroup
-func (s *LoadBalance) Now() string {
+func (s *LoadBalanceProfile) Now() string {
 	picked := s.Pick(context.Background(), N.NetworkTCP, M.Socksaddr{})
 	if picked == nil {
 		return ""
@@ -75,7 +68,7 @@ func (s *LoadBalance) Now() string {
 }
 
 // All implements adapter.OutboundGroup
-func (s *LoadBalance) All() []string {
+func (s *LoadBalanceProfile) All() []string {
 	// s.LogNodes()
 	// return s.GroupAdapter.All()
 
@@ -86,12 +79,12 @@ func (s *LoadBalance) All() []string {
 }
 
 // Network implements adapter.OutboundGroup
-func (s *LoadBalance) Network() []string {
+func (s *LoadBalanceProfile) Network() []string {
 	return s.Balancer.Networks()
 }
 
 // DialContext implements adapter.Outbound
-func (s *LoadBalance) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+func (s *LoadBalanceProfile) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	var lastErr error
 	maxRetry := 5
 	for i := 0; i < maxRetry; i++ {
@@ -112,7 +105,7 @@ func (s *LoadBalance) DialContext(ctx context.Context, network string, destinati
 }
 
 // ListenPacket implements adapter.Outbound
-func (s *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+func (s *LoadBalanceProfile) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	var lastErr error
 	maxRetry := 5
 	for i := 0; i < maxRetry; i++ {
@@ -133,7 +126,7 @@ func (s *LoadBalance) ListenPacket(ctx context.Context, destination M.Socksaddr)
 }
 
 // NewConnectionEx implements adapter.TCPInjectableInbound
-func (s *LoadBalance) NewConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+func (s *LoadBalanceProfile) NewConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	selected := s.Pick(ctx, N.NetworkUDP, metadata.Destination)
 	if selected == nil {
 		s.connection.NewConnection(ctx, newErrDailer(E.New("no outbound available")), conn, metadata, onClose)
@@ -148,7 +141,7 @@ func (s *LoadBalance) NewConnectionEx(ctx context.Context, conn net.Conn, metada
 }
 
 // NewPacketConnectionEx implements adapter.UDPInjectableInbound
-func (s *LoadBalance) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
+func (s *LoadBalanceProfile) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext, onClose N.CloseHandlerFunc) {
 	selected := s.Pick(ctx, N.NetworkUDP, metadata.Destination)
 	if selected == nil {
 		s.connection.NewPacketConnection(ctx, newErrDailer(E.New("no outbound available")), conn, metadata, onClose)
@@ -163,7 +156,7 @@ func (s *LoadBalance) NewPacketConnectionEx(ctx context.Context, conn N.PacketCo
 }
 
 // NewDirectRouteConnection implements adapter.DirectRouteOutbound
-func (s *LoadBalance) NewDirectRouteConnection(metadata adapter.InboundContext, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
+func (s *LoadBalanceProfile) NewDirectRouteConnection(metadata adapter.InboundContext, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
 	ctx := adapter.WithContext(context.Background(), &metadata)
 	destination := metadata.Destination
 	picked := s.Pick(ctx, N.NetworkICMP, destination)
@@ -181,7 +174,7 @@ func (s *LoadBalance) NewDirectRouteConnection(metadata adapter.InboundContext, 
 }
 
 // Close implements adapter.Service
-func (s *LoadBalance) Close() error {
+func (s *LoadBalanceProfile) Close() error {
 	if s.Balancer == nil {
 		return nil
 	}
@@ -189,15 +182,83 @@ func (s *LoadBalance) Close() error {
 }
 
 // Start implements adapter.Service
-func (s *LoadBalance) Start() error {
-	if err := s.InitProviders(s.outbound, s.provider); err != nil {
-		return err
+func (s *LoadBalanceProfile) Start() error {
+	outbound, ok := s.outbound.Outbound(s.options.LoadBalanceTag)
+	if !ok {
+		return E.New("loadbalance not found: ", s.options.LoadBalanceTag)
 	}
-	hc := healthcheck.New(s.ctx, s.router, s.outbound, s.Providers(), &s.options.Check, s.logger)
-	b, err := balancer.New(s.logger, &s.GroupAdapter, hc, s.options.Pick)
+	lb, ok := outbound.(*LoadBalance)
+	if !ok {
+		return E.New("outbound is not a load balance: ", s.options.LoadBalanceTag)
+	}
+	s.profileAdapter.GroupAdapter = &lb.GroupAdapter
+	b, err := balancer.New(s.logger, &lb.GroupAdapter, lb.HealthCheck, s.options.Pick)
 	if err != nil {
 		return err
 	}
 	s.Balancer = b
 	return s.Balancer.Start()
+}
+
+type profileAdapter struct {
+	typ  string
+	tag  string
+	deps []string
+	*outbound.GroupAdapter
+}
+
+func newProfileAdapter(typ string, tag string, deps []string) *profileAdapter {
+	return &profileAdapter{
+		typ:          typ,
+		tag:          tag,
+		deps:         deps,
+		GroupAdapter: nil,
+	}
+}
+
+func (a *profileAdapter) Type() string {
+	return a.typ
+}
+
+func (a *profileAdapter) Tag() string {
+	return a.tag
+}
+
+func (a *profileAdapter) Network() []string {
+	if a.GroupAdapter == nil {
+		return nil
+	}
+	return a.GroupAdapter.Adapter.Network()
+}
+
+func (a *profileAdapter) Dependencies() []string {
+	return a.deps
+}
+
+func (a *profileAdapter) Outbound(tag string) (adapter.Outbound, bool) {
+	if a.GroupAdapter == nil {
+		return nil, false
+	}
+	return a.GroupAdapter.Outbound(tag)
+}
+
+func (a *profileAdapter) Outbounds() []adapter.Outbound {
+	if a.GroupAdapter == nil {
+		return nil
+	}
+	return a.GroupAdapter.Outbounds()
+}
+
+func (a *profileAdapter) Provider(tag string) (adapter.Provider, bool) {
+	if a.GroupAdapter == nil {
+		return nil, false
+	}
+	return a.GroupAdapter.Provider(tag)
+}
+
+func (a *profileAdapter) Providers() []adapter.Provider {
+	if a.GroupAdapter == nil {
+		return nil
+	}
+	return a.GroupAdapter.Providers()
 }

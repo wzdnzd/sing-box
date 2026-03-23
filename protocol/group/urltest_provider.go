@@ -62,7 +62,7 @@ func NewURLTestProvider(ctx context.Context, router adapter.Router, logger log.C
 		tolerance = 50
 	}
 	outbound := &URLTestProvider{
-		GroupAdapter: outbound.NewGroupAdapter(C.TypeURLTest, tag, []string{N.NetworkTCP, N.NetworkUDP}, router, options.ProviderGroupCommonOption),
+		GroupAdapter: outbound.NewGroupAdapter(C.TypeURLTest, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.ProviderGroupCommonOption),
 		ctx:          ctx,
 		router:       router,
 		logger:       logger,
