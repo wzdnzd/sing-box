@@ -49,14 +49,18 @@ type LoadBalance struct {
 // NewLoadBalance creates a new load balance outbound
 func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceOutboundOptions) (adapter.Outbound, error) {
 	return &LoadBalance{
-		GroupAdapter: outbound.NewGroupAdapter(C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP}, router, options.ProviderGroupCommonOption),
-		ctx:          ctx,
-		router:       router,
-		logger:       logger,
-		outbound:     service.FromContext[adapter.OutboundManager](ctx),
-		provider:     service.FromContext[adapter.ProviderManager](ctx),
-		connection:   service.FromContext[adapter.ConnectionManager](ctx),
-		options:      options,
+		GroupAdapter: outbound.NewGroupAdapter(
+			C.TypeLoadBalance, tag, []string{N.NetworkTCP, N.NetworkUDP},
+			router, options.ProviderGroupCommonOption,
+			options.Check.DetourOf...,
+		),
+		ctx:        ctx,
+		router:     router,
+		logger:     logger,
+		outbound:   service.FromContext[adapter.OutboundManager](ctx),
+		provider:   service.FromContext[adapter.ProviderManager](ctx),
+		connection: service.FromContext[adapter.ConnectionManager](ctx),
+		options:    options,
 	}, nil
 }
 

@@ -50,9 +50,14 @@ func (a *Adapter) Dependencies() []string {
 func NewGroupAdapter(
 	outboundType string, outboundTag string, network []string,
 	router adapter.Router, options option.ProviderGroupCommonOption,
+	extraDeps ...string,
 ) GroupAdapter {
+	deps := options.Outbounds
+	if len(extraDeps) > 0 {
+		deps = append(deps, extraDeps...)
+	}
 	adapter := GroupAdapter{
-		Adapter: NewAdapter(outboundType, outboundTag, network, options.Outbounds),
+		Adapter: NewAdapter(outboundType, outboundTag, network, deps),
 		router:  router,
 		options: options,
 	}
