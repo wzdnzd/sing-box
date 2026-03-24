@@ -5,8 +5,9 @@ import "github.com/sagernet/sing/common/json/badoption"
 // LoadBalanceOutboundOptions is the options for balancer outbound
 type LoadBalanceOutboundOptions struct {
 	ProviderGroupCommonOption
-	Check HealthCheckOptions     `json:"check,omitempty"`
-	Pick  LoadBalancePickOptions `json:"pick,omitempty"`
+	Check    HealthCheckOptions          `json:"check,omitempty"`
+	Pick     LoadBalancePickOptions      `json:"pick,omitempty"`
+	Profiles []LoadBalanceProfileOptions `json:"profiles,omitempty"`
 }
 
 // LoadBalanceProfileOutboundOptions is the options for load balance profile
@@ -31,6 +32,12 @@ type LoadBalancePickOptions struct {
 	Baselines []badoption.Duration `json:"baselines,omitempty"`
 	// pick biases
 	Biases []LoadBalancePickBias `json:"biases,omitempty"`
+}
+
+// LoadBalanceProfileOptions is the options for load balance profile
+type LoadBalanceProfileOptions struct {
+	Tag string `json:"tag,omitempty"`
+	LoadBalancePickOptions
 }
 
 // LoadBalancePickBias is the bias for load balance picking

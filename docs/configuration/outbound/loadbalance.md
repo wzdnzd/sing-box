@@ -48,7 +48,14 @@
         "rtt_scale": 10
       }
     ]
-  }
+  },
+  "profiles": [
+    {
+      "tag": "loadbalance-alive",
+      "objective": "alive",
+      "strategy": "random"
+    }
+  ]
 }
 ```
 
@@ -206,3 +213,9 @@ For example, `rtt_scale: 10` means that when the node's round-trip time is `100m
 - `regexp` means matching when the node tag matches a regular expression.
 
 If multiple conditions are configured, matching any one of them is sufficient.
+
+### profiles
+
+The extra profile for load balancing, default is empty. When `profiles` is not empty, sing-box will create an outbound for each profile, with the `tag` field in profile as the tag of the outbound, and the rest of the fields refer to [Pick Fields](#pick-fields) .
+
+The new outbound is based on the current load balancing outbound, and does not add extra health check overhead.

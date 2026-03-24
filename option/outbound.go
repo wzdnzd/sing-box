@@ -14,6 +14,8 @@ import (
 
 type OutboundOptionsRegistry interface {
 	CreateOptions(outboundType string) (any, bool)
+
+	DeriveOptions(outboundType string, outboundTag string, options any) []Outbound
 }
 
 type _Outbound struct {

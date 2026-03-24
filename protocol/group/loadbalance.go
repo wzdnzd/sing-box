@@ -22,7 +22,7 @@ import (
 )
 
 func RegisterLoadBalance(registry *outbound.Registry) {
-	outbound.Register[option.LoadBalanceOutboundOptions](registry, C.TypeLoadBalance, NewLoadBalance)
+	outbound.Register(registry, C.TypeLoadBalance, NewLoadBalance, DeriveLoadBalanceProfiles)
 }
 
 var (
@@ -63,6 +63,27 @@ func NewLoadBalance(ctx context.Context, router adapter.Router, logger log.Conte
 		connection: service.FromContext[adapter.ConnectionManager](ctx),
 		options:    options,
 	}, nil
+}
+
+// DeriveLoadBalanceProfiles derives load balance profile outbounds from load balance outbound options
+func DeriveLoadBalanceProfiles(tag string, options option.LoadBalanceOutboundOptions) []option.Outbound {
+	profiles := options.Profiles
+	if len(profiles) == 0 {
+		return nil
+	}
+	result := make([]option.Outbound, 0, len(profiles))
+	for _, profile := range profiles {
+		result = append(result, option.Outbound{
+			Type: C.TypeLoadBalanceProfile,
+			Tag:  profile.Tag,
+			// Must be pointer type
+			Options: &option.LoadBalanceProfileOutboundOptions{
+				LoadBalanceTag: tag,
+				Pick:           profile.LoadBalancePickOptions,
+			},
+		})
+	}
+	return result
 }
 
 // Now implements adapter.OutboundGroup

@@ -48,7 +48,14 @@
         "rtt_scale": 10
       }
     ]
-  }
+  },
+  "profiles": [
+    {
+      "tag": "loadbalance-alive",
+      "objective": "alive",
+      "strategy": "random"
+    }
+  ]
 }
 ```
 
@@ -205,3 +212,9 @@ Shadowsocks (A) ---> Trojan [B.Node]
 - `regexp` 表示节点标签匹配某个正则表达式时匹配。
 
 如果配置了多个条件，满足任一条件即可匹配。
+
+### profiles
+
+负载均衡的额外配置文件，默认为空。当 `profiles` 不为空时，sing-box 将为每个配置文件创建一个出站，标签为配置中的 `tag` 字段，其余字段参考[节点挑选字段](#节点挑选字段)。
+
+新增出站基于当前负载均衡出站，不会增加额外的健康检查开销。
