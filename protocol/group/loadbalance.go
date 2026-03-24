@@ -79,6 +79,8 @@ func DeriveLoadBalanceProfiles(tag string, options option.LoadBalanceOutboundOpt
 			// Must be pointer type
 			Options: &option.LoadBalanceProfileOutboundOptions{
 				LoadBalanceTag: tag,
+				Exclude:        profile.Exclude,
+				Include:        profile.Include,
 				Pick:           profile.LoadBalancePickOptions,
 			},
 		})

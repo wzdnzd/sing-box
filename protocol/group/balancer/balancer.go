@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/healthcheck"
@@ -19,7 +18,7 @@ var _ adapter.InterfaceUpdateListener = (*Balancer)(nil)
 // Balancer is the load balancer
 type Balancer struct {
 	*healthcheck.HealthCheck
-	Adapter *outbound.GroupAdapter
+	Adapter providersAdapter
 
 	logger log.ContextLogger
 	cfg    balancerConfig
@@ -30,6 +29,10 @@ type Balancer struct {
 	networks []string
 }
 
+type providersAdapter interface {
+	Providers() []adapter.Provider
+}
+
 // New creates a new load balancer
 //
 // The globalHistory is optional and is only used to sync latency history
@@ -38,7 +41,7 @@ type Balancer struct {
 // sampling numbers, etc.
 func New(
 	logger log.ContextLogger,
-	adapter *outbound.GroupAdapter,
+	adapter providersAdapter,
 	hc *healthcheck.HealthCheck,
 	options option.LoadBalancePickOptions,
 ) (*Balancer, error) {

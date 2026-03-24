@@ -12,6 +12,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group/balancer"
+	"github.com/sagernet/sing-box/provider"
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -48,7 +49,8 @@ type LoadBalanceProfile struct {
 func NewLoadBalanceProfile(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.LoadBalanceProfileOutboundOptions) (adapter.Outbound, error) {
 	return &LoadBalanceProfile{
 		profileAdapter: *newProfileAdapter(
-			C.TypeLoadBalanceProfile, tag, []string{options.LoadBalanceTag},
+			C.TypeLoadBalanceProfile, tag, options.Exclude, options.Include,
+			[]string{options.LoadBalanceTag},
 		),
 		ctx:        ctx,
 		logger:     logger,
@@ -191,8 +193,8 @@ func (s *LoadBalanceProfile) Start() error {
 	if !ok {
 		return E.New("outbound is not a load balance: ", s.options.LoadBalanceTag)
 	}
-	s.profileAdapter.GroupAdapter = &lb.GroupAdapter
-	b, err := balancer.New(s.logger, &lb.GroupAdapter, lb.HealthCheck, s.options.Pick)
+	s.profileAdapter.SetUpstream(&lb.GroupAdapter)
+	b, err := balancer.New(s.logger, &s.profileAdapter, lb.HealthCheck, s.options.Pick)
 	if err != nil {
 		return err
 	}
@@ -201,18 +203,24 @@ func (s *LoadBalanceProfile) Start() error {
 }
 
 type profileAdapter struct {
-	typ  string
-	tag  string
-	deps []string
-	*outbound.GroupAdapter
+	typ     string
+	tag     string
+	exclude string
+	include string
+	deps    []string
+	network []string
+
+	providers      []adapter.Provider
+	providersByTag map[string]adapter.Provider
 }
 
-func newProfileAdapter(typ string, tag string, deps []string) *profileAdapter {
+func newProfileAdapter(typ string, tag string, exclude, include string, deps []string) *profileAdapter {
 	return &profileAdapter{
-		typ:          typ,
-		tag:          tag,
-		deps:         deps,
-		GroupAdapter: nil,
+		typ:     typ,
+		tag:     tag,
+		deps:    deps,
+		exclude: exclude,
+		include: include,
 	}
 }
 
@@ -225,40 +233,62 @@ func (a *profileAdapter) Tag() string {
 }
 
 func (a *profileAdapter) Network() []string {
-	if a.GroupAdapter == nil {
-		return nil
-	}
-	return a.GroupAdapter.Adapter.Network()
+	return a.network
 }
 
 func (a *profileAdapter) Dependencies() []string {
 	return a.deps
 }
-
-func (a *profileAdapter) Outbound(tag string) (adapter.Outbound, bool) {
-	if a.GroupAdapter == nil {
-		return nil, false
-	}
-	return a.GroupAdapter.Outbound(tag)
-}
-
-func (a *profileAdapter) Outbounds() []adapter.Outbound {
-	if a.GroupAdapter == nil {
-		return nil
-	}
-	return a.GroupAdapter.Outbounds()
-}
-
 func (a *profileAdapter) Provider(tag string) (adapter.Provider, bool) {
-	if a.GroupAdapter == nil {
+	if a.providersByTag == nil {
 		return nil, false
 	}
-	return a.GroupAdapter.Provider(tag)
+	p, ok := a.providersByTag[tag]
+	return p, ok
 }
 
 func (a *profileAdapter) Providers() []adapter.Provider {
-	if a.GroupAdapter == nil {
+	return a.providers
+}
+
+func (a *profileAdapter) Outbound(tag string) (adapter.Outbound, bool) {
+	if len(a.providers) == 0 {
+		return nil, false
+	}
+	for _, p := range a.providers {
+		if outbound, ok := p.Outbound(tag); ok {
+			return outbound, true
+		}
+	}
+	return nil, false
+}
+
+func (a *profileAdapter) Outbounds() []adapter.Outbound {
+	if len(a.providers) == 0 {
 		return nil
 	}
-	return a.GroupAdapter.Providers()
+	var outbounds []adapter.Outbound
+	for _, p := range a.providers {
+		outbounds = append(outbounds, p.Outbounds()...)
+	}
+	return outbounds
+}
+
+func (a *profileAdapter) SetUpstream(upstream *outbound.GroupAdapter) {
+	a.network = upstream.Network()
+	a.providers = common.Map(upstream.Providers(), func(p adapter.Provider) adapter.Provider {
+		if a.exclude == "" && a.include == "" {
+			return p
+		}
+		r, err := provider.NewFiltered(p, a.exclude, a.include)
+		if err != nil {
+			log.Error("[", a.tag, "] failed to create filtered provider: ", err)
+			return p
+		}
+		return r
+	})
+	a.providersByTag = make(map[string]adapter.Provider)
+	for _, p := range a.providers {
+		a.providersByTag[p.Tag()] = p
+	}
 }

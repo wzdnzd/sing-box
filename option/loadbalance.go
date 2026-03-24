@@ -13,6 +13,8 @@ type LoadBalanceOutboundOptions struct {
 // LoadBalanceProfileOutboundOptions is the options for load balance profile
 type LoadBalanceProfileOutboundOptions struct {
 	LoadBalanceTag string                 `json:"loadbalance_tag,omitempty"`
+	Exclude        string                 `json:"exclude,omitempty"`
+	Include        string                 `json:"include,omitempty"`
 	Pick           LoadBalancePickOptions `json:"pick,omitempty"`
 }
 
@@ -36,7 +38,9 @@ type LoadBalancePickOptions struct {
 
 // LoadBalanceProfileOptions is the options for load balance profile
 type LoadBalanceProfileOptions struct {
-	Tag string `json:"tag,omitempty"`
+	Tag     string `json:"tag,omitempty"`
+	Exclude string `json:"exclude,omitempty"`
+	Include string `json:"include,omitempty"`
 	LoadBalancePickOptions
 }
 
