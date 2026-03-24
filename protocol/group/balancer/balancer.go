@@ -23,8 +23,8 @@ type Balancer struct {
 	logger log.ContextLogger
 	cfg    balancerConfig
 
-	objective Objective
-	strategy  Strategy
+	Objective Objective
+	Strategy  Strategy
 
 	networks []string
 }
@@ -84,8 +84,8 @@ func New(
 		logger:      logger,
 		Adapter:     adapter,
 		HealthCheck: hc,
-		objective:   objective,
-		strategy:    strategy,
+		Objective:   objective,
+		Strategy:    strategy,
 	}, nil
 }
 
@@ -97,8 +97,8 @@ func (b *Balancer) Pick(ctx context.Context, network string, destination M.Socks
 	}
 	metadata.Destination = destination
 	all := b.Nodes(network)
-	filtered := b.objective.Filter(all)
-	picked := b.strategy.Pick(all, filtered, metadata)
+	filtered := b.Objective.Filter(all)
+	picked := b.Strategy.Pick(all, filtered, metadata)
 	if picked == nil {
 		return nil
 	}
@@ -172,14 +172,14 @@ func (b *Balancer) availableNetworks() []string {
 // The available nodes are in front of the slice, and the unavailable nodes are in the back.
 func (b *Balancer) LogNodesAndReturn() (all []*Node, available int) {
 	all = b.Nodes("")
-	filtered := b.objective.Filter(all)
+	filtered := b.Objective.Filter(all)
 	available = len(filtered)
 	b.logger.Info(
 		b.cfg.Objective, "/", b.cfg.Strategy, ", ",
 		available, " of ", len(all), " nodes available",
 	)
 	b.logger.Info("=== nodes available ===")
-	b.objective.Sort(all)
+	b.Objective.Sort(all)
 	for i, n := range all {
 		if i == available {
 			b.logger.Info("=== nodes unavailable ===")
