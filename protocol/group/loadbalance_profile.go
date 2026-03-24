@@ -71,9 +71,8 @@ func (s *LoadBalanceProfile) Now() string {
 
 // All implements adapter.OutboundGroup
 func (s *LoadBalanceProfile) All() []string {
-	all := s.Nodes("")
-	s.Objective.Sort(all)
-	return common.Map(all, func(node *balancer.Node) string {
+	_, filtered := s.GetNodes(false)
+	return common.Map(filtered, func(node *balancer.Node) string {
 		return node.Tag()
 	})
 }
