@@ -106,15 +106,17 @@ func allFiles(files, dirs []string) ([]string, error) {
 		if err != nil {
 			return nil, E.Cause(err, "read config directory at ", dir)
 		}
+		dirFiles := make([]string, 0, len(entries))
 		for _, entry := range entries {
 			if entry.IsDir() || !common.Contains(extensions, filepath.Ext(entry.Name())) {
 				continue
 			}
-			all = append(all, filepath.Join(dir, entry.Name()))
+			dirFiles = append(dirFiles, filepath.Join(dir, entry.Name()))
 		}
+		sort.Slice(dirFiles, func(i, j int) bool {
+			return dirFiles[i] < dirFiles[j]
+		})
+		all = append(all, dirFiles...)
 	}
-	sort.Slice(all, func(i, j int) bool {
-		return all[i] < all[j]
-	})
 	return all, nil
 }
