@@ -69,7 +69,7 @@ func NewEndpoint(options EndpointOptions) (*Endpoint, error) {
 		}
 		if rawPeer.Endpoint.Addr.IsValid() {
 			peer.endpoint = rawPeer.Endpoint.AddrPort()
-		} else if rawPeer.Endpoint.IsFqdn() {
+		} else if rawPeer.Endpoint.IsDomain() {
 			peer.destination = rawPeer.Endpoint
 		}
 		publicKeyBytes, err := base64.StdEncoding.DecodeString(rawPeer.PublicKey)
@@ -140,15 +140,15 @@ func NewEndpoint(options EndpointOptions) (*Endpoint, error) {
 }
 
 func (e *Endpoint) Start(resolve bool) error {
-	withFQDN := common.Any(e.peers, func(peer peerConfig) bool {
-		return !peer.endpoint.IsValid() && peer.destination.IsFqdn()
+	withDomain := common.Any(e.peers, func(peer peerConfig) bool {
+		return !peer.endpoint.IsValid() && peer.destination.IsDomain()
 	})
-	if withFQDN {
+	if withDomain {
 		if !resolve {
 			return nil
 		}
 		for peerIndex, peer := range e.peers {
-			if peer.endpoint.IsValid() || !peer.destination.IsFqdn() {
+			if peer.endpoint.IsValid() || !peer.destination.IsDomain() {
 				continue
 			}
 			destinationAddress, err := e.options.ResolvePeer(peer.destination.Fqdn)
@@ -218,7 +218,7 @@ func (e *Endpoint) Start(resolve bool) error {
 		e.pauseCallback = e.pause.RegisterCallback(e.onPauseUpdated)
 	}
 	e.allowedIPs = (*device.AllowedIPs)(unsafe.Pointer(reflect.Indirect(reflect.ValueOf(wgDevice)).FieldByName("allowedips").UnsafeAddr()))
-	e.startedWithFQDN = withFQDN
+	e.startedWithFQDN = withDomain
 	return nil
 }
 
@@ -247,11 +247,12 @@ func (e *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 }
 
 func (e *Endpoint) Close() error {
-	if e.device != nil {
-		e.device.Close()
-	}
 	if e.pauseCallback != nil {
 		e.pause.UnregisterCallback(e.pauseCallback)
+	}
+	if e.device != nil {
+		e.device.Down()
+		e.device.Close()
 	}
 	return nil
 }
