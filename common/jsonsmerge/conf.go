@@ -51,6 +51,7 @@ func init() {
 		jsons.WithMergeByAndRemove("_tag"),
 		jsons.WithOrderByAndRemove("_order"),
 		jsons.WithIndent("", "  "),
+		jsons.WithPreprocessor(expandEnv),
 	)
 	merger.RegisterOrderedLoader(
 		formatJSON,
