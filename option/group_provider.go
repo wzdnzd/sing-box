@@ -26,8 +26,9 @@ type ChainOptions struct {
 
 // ProviderGroupCommonOption is the common options for group outbounds with providers support
 type ProviderGroupCommonOption struct {
-	Outbounds []string `json:"outbounds"`
-	Providers []string `json:"providers"`
-	Exclude   string   `json:"exclude,omitempty"`
-	Include   string   `json:"include,omitempty"`
+	Outbounds    []string `json:"outbounds"`
+	Providers    []string `json:"providers"`
+	AllProviders bool     `json:"all_providers,omitempty"`
+	Exclude      string   `json:"exclude,omitempty"`
+	Include      string   `json:"include,omitempty"`
 }

@@ -82,7 +82,7 @@ func (a *GroupAdapter) All() []string {
 }
 
 func (a *GroupAdapter) InitProviders(om adapter.OutboundManager, pm adapter.ProviderManager) error {
-	if len(a.options.Outbounds)+len(a.options.Providers) == 0 {
+	if len(a.options.Outbounds)+len(a.options.Providers) == 0 && !a.options.AllProviders {
 		return E.New("missing outbound and provider tags")
 	}
 	outbounds := make([]adapter.Outbound, 0, len(a.options.Outbounds))
@@ -98,11 +98,20 @@ func (a *GroupAdapter) InitProviders(om adapter.OutboundManager, pm adapter.Prov
 	if len(outbounds) > 0 {
 		providers = append(providers, provider.NewMemory(outbounds))
 	}
+	if a.options.AllProviders {
+		for _, p := range pm.Providers() {
+			providers = append(providers, p)
+			providersByTag[p.Tag()] = p
+		}
+	}
 	var err error
 	for _, tag := range a.options.Providers {
 		p, ok := pm.Provider(tag)
 		if !ok {
 			return E.New("provider not found: ", tag)
+		}
+		if _, exists := providersByTag[tag]; exists {
+			continue
 		}
 		if a.options.Exclude != "" || a.options.Include != "" {
 			p, err = provider.NewFiltered(p, a.options.Exclude, a.options.Include)

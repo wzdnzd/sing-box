@@ -10,6 +10,7 @@
     "proxy-b",
     "proxy-c"
   ],
+  "all_providers": false,
   "providers": [
     "provider-a",
     "provider-b",
@@ -27,6 +28,10 @@
 #### outbounds
 
 List of outbound tags to test.
+
+#### all_providers
+
+When `all_providers` is `true`, all providers will be used instead of just those in the `providers` list. The default value is `false`.
 
 #### providers
 
