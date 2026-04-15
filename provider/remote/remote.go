@@ -149,28 +149,33 @@ func (s *Remote) Info() *adapter.ProviderInfo {
 
 // Start starts the provider.
 func (s *Remote) Start(stage adapter.StartStage) error {
-	if stage != adapter.StartStateStart {
-		return nil
-	}
 	s.Lock()
 	defer s.Unlock()
 
-	if s.cancel != nil {
+	switch stage {
+	case adapter.StartStateInitialize:
+		if s.downloadDetour != "" {
+			outbound, loaded := s.outbound.Outbound(s.downloadDetour)
+			if !loaded {
+				return E.New("detour outbound not found: ", s.downloadDetour)
+			}
+			s.detour = outbound
+		} else {
+			s.detour = s.outbound.Default()
+		}
+		return nil
+	case adapter.StartStatePostStart:
+		// start in post start stage, so that outbounds added by the provider
+		// do not interfere with the startup process of existing outbounds
+		if s.cancel != nil {
+			return nil
+		}
+		s.ctx, s.cancel = context.WithCancel(s.ctx)
+		go s.refreshLoop()
+		return nil
+	default:
 		return nil
 	}
-	if s.downloadDetour != "" {
-		outbound, loaded := s.outbound.Outbound(s.downloadDetour)
-		if !loaded {
-			return E.New("detour outbound not found: ", s.downloadDetour)
-		}
-		s.detour = outbound
-	} else {
-		s.detour = s.outbound.Default()
-	}
-
-	s.ctx, s.cancel = context.WithCancel(s.ctx)
-	go s.refreshLoop()
-	return nil
 }
 
 // Close closes the service.

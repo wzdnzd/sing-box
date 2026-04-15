@@ -47,30 +47,29 @@ func (m *Manager) Start(stage adapter.StartStage) error {
 	m.stage = stage
 	providers := m.providers
 	m.access.Unlock()
-	if stage == adapter.StartStateStart {
-		return m.startProviders(providers)
-	}
-	return nil
+	return m.startProviders(stage, providers)
 }
 
-func (m *Manager) startProviders(providers []adapter.Provider) error {
+func (m *Manager) startProviders(stage adapter.StartStage, providers []adapter.Provider) error {
 	monitor := taskmonitor.New(m.logger, C.StartTimeout)
 	started := make(map[string]bool)
-	for {
-		for _, providerToStart := range providers {
-			providerTag := providerToStart.Tag()
-			if started[providerTag] {
-				continue
+	for _, providerToStart := range providers {
+		providerTag := providerToStart.Tag()
+		if started[providerTag] {
+			continue
+		}
+		started[providerTag] = true
+		if starter, isStarter := providerToStart.(adapter.Lifecycle); isStarter {
+			monitor.Start("start provider", "[", providerTag, "]")
+			err := starter.Start(stage)
+			monitor.Finish()
+			if err != nil {
+				return E.Cause(err, "start provider", "[", providerTag, "]")
 			}
-			started[providerTag] = true
-			if starter, isStarter := providerToStart.(adapter.Lifecycle); isStarter {
-				monitor.Start("start provider", "[", providerTag, "]")
-				err := starter.Start(adapter.StartStateStart)
-				monitor.Finish()
-				if err != nil {
-					return E.Cause(err, "start provider", "[", providerTag, "]")
-				}
-			} else if starter, isStarter := providerToStart.(interface {
+		} else if stage == adapter.StartStatePostStart {
+			// for legacy provider, start it in post start stage, so that outbounds added by the provider
+			// do not interfere with the startup process of existing outbounds
+			if starter, isStarter := providerToStart.(interface {
 				Start() error
 			}); isStarter {
 				monitor.Start("start provider", "[", providerTag, "]")
@@ -80,9 +79,6 @@ func (m *Manager) startProviders(providers []adapter.Provider) error {
 					return E.Cause(err, "start provider", "[", providerTag, "]")
 				}
 			}
-		}
-		if len(started) == len(providers) {
-			break
 		}
 	}
 	return nil
