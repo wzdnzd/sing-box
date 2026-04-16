@@ -30,7 +30,7 @@ jobs:
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
         with:
-          go-version: ^1.24
+          go-version: ~1.25.9
       - name: 获取commit id
         id: get_commit
         run: |
@@ -94,7 +94,7 @@ jobs:
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
         with:
-          go-version: ^1.24
+          go-version: ~1.25.9
       - name: 设置环境变量
         run: |
           echo "VERSION=${{ needs.calculate_version.outputs.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8

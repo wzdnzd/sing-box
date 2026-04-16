@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.WORKFLOW_TOKEN }} # 使用GitHub提供的token
 
       - name: 配置 Git
         run: |
