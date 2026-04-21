@@ -155,16 +155,13 @@ func (h *HealthCheck) ReportFailure(outbound adapter.Outbound) {
 		return
 	}
 	tag := outbound.Tag()
-	history := h.Storage.Latest(tag)
-	if history == nil || history.Delay != Failed {
-		// don't put more failed records if it's known failed,
-		// or it will interferes with the max_fail assertion
-		h.Storage.Put(tag, Failed)
-	}
+	// MUST Update instead of Put, since Put will add a new history
+	// which affects the max_fail assertion in balancers.
+	h.Storage.Update(tag, Failed)
 }
 
 func (h *HealthCheck) checkLoop(ctx context.Context) {
-	go h.CheckAll(ctx)
+	go h.checkAll(ctx, true)
 	ticker := time.NewTicker(time.Duration(h.options.Interval))
 	defer ticker.Stop()
 	for {
@@ -173,16 +170,21 @@ func (h *HealthCheck) checkLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			go h.CheckAll(ctx)
+			go h.checkAll(ctx, true)
 		}
 	}
 }
 
 // CheckAll performs checks for nodes of all providers
 func (h *HealthCheck) CheckAll(ctx context.Context) (map[string]uint16, error) {
+	return h.checkAll(ctx, false)
+}
+
+func (h *HealthCheck) checkAll(ctx context.Context, scheduled bool) (map[string]uint16, error) {
 	batch, _ := batch.New(ctx, batch.WithConcurrencyNum[uint16](10))
 	// share ctx information between checks
 	meta := NewMetaData()
+	meta.scheduled = scheduled
 	for _, provider := range h.providers {
 		err := h.checkProviderBatch(ctx, meta, batch, provider)
 		if err != nil {
@@ -225,7 +227,7 @@ func (h *HealthCheck) CheckOutbound(ctx context.Context, tag string) (uint16, er
 			Delay: t,
 		})
 	}
-	h.Storage.Put(tag, RTT(t))
+	h.Storage.Update(tag, RTT(t))
 	return t, err
 }
 
@@ -313,7 +315,11 @@ func (h *HealthCheck) waitProcessResult(batch *batch.Batch[uint16], meta *MetaDa
 		// ignore all-failed result, since it doesn't contribute to the
 		// objective to tell which nodes are better
 		if meta.AnySuccess() {
-			h.Storage.Put(tag, RTT(v.Value))
+			if meta.scheduled {
+				h.Storage.Put(tag, RTT(v.Value))
+			} else {
+				h.Storage.Update(tag, RTT(v.Value))
+			}
 		}
 	}
 	return r, nil

@@ -22,7 +22,11 @@ import (
 // assume the network is down and ignore the all-failed result.
 type MetaData struct {
 	sync.Mutex
-
+	// scheduled is true if the check is scheduled.
+	// The scheduled check will append the check result to Storage for statistics,
+	// while the non-scheduled check updates the latest check result,
+	// allowing user to refresh the latest check result without evicting the history.
+	scheduled  bool
 	anySuccess bool
 	checked    map[string]bool
 }

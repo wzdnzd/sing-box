@@ -62,6 +62,18 @@ func (s *Storages) Put(tag string, delay RTT) {
 	store.Put(delay)
 }
 
+// Update updates the latest history for the tag
+func (s *Storages) Update(tag string, delay RTT) {
+	s.Lock()
+	defer s.Unlock()
+	store, ok := s.storages[tag]
+	if !ok {
+		store = NewStorage(s.cap, s.validity)
+		s.storages[tag] = store
+	}
+	store.Update(delay)
+}
+
 // Delete remove the histories storage for the tag
 func (s *Storages) Delete(tag string) {
 	s.Lock()

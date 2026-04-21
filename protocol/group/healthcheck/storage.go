@@ -35,6 +35,14 @@ func (s *Storage) Put(d RTT) {
 		return
 	}
 	s.idx = s.offset(1)
+	s.Update(d)
+}
+
+// Update updates the last history
+func (s *Storage) Update(d RTT) {
+	if s == nil {
+		return
+	}
 	// strip monotonic clock from `now` to avoid inaccurate
 	// time comparison after computer sleep
 	// https://pkg.go.dev/time#hdr-Monotonic_Clocks
