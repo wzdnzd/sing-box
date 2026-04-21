@@ -191,17 +191,6 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 
 func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		proxy := r.Context().Value(CtxKeyProxy).(adapter.Outbound)
-		// yacd may request the delay of a group
-		if group, isGroup := proxy.(adapter.OutboundGroup); isGroup {
-			outbound, err := adapter.RealOutbound(group)
-			if err != nil {
-				render.Status(r, http.StatusInternalServerError)
-				render.JSON(w, r, newError(err.Error()))
-				return
-			}
-			proxy = outbound
-		}
 		query := r.URL.Query()
 		url := query.Get("url")
 		if strings.HasPrefix(url, "http://") {
@@ -214,23 +203,29 @@ func getProxyDelay(server *Server) func(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		proxy := r.Context().Value(CtxKeyProxy).(adapter.Outbound)
+		// yacd may request the delay of a group
+		if group, isGroup := proxy.(adapter.OutboundGroup); isGroup {
+			outbound, err := adapter.RealOutbound(group)
+			if err != nil {
+				render.Status(r, http.StatusInternalServerError)
+				render.JSON(w, r, newError(err.Error()))
+				return
+			}
+			proxy = outbound
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 		defer cancel()
 
 		delay, err := urltest.URLTest(ctx, url, proxy)
 		defer func() {
-			real, err := adapter.RealOutbound(proxy)
 			if err != nil {
-				server.urlTestHistory.StoreURLTestHistory(proxy.Tag(), &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: 0,
-				})
-			} else {
-				server.urlTestHistory.StoreURLTestHistory(real.Tag(), &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: delay,
-				})
+				server.urlTestHistory.DeleteURLTestHistory(proxy.Tag())
 			}
+			server.urlTestHistory.StoreURLTestHistory(proxy.Tag(), &adapter.URLTestHistory{
+				Time:  time.Now(),
+				Delay: delay,
+			})
 		}()
 
 		if ctx.Err() != nil {
